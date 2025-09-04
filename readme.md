@@ -15,9 +15,11 @@ A high-performance, in-memory leaderboard system designed for real-time talent s
 
 ### Run the Service
 ```bash
-# Build and run
-make build
+# Build and run (opens dashboard in browser automatically)
 make run
+
+# Or run without opening browser
+make run-simple
 
 # Or with custom config
 export CUJU_CONFIG=./config.yaml

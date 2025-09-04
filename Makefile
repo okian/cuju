@@ -9,6 +9,27 @@ build:
 
 # Run the application (server mode by default)
 run: build
+	@echo "Starting CUJU leaderboard service..."
+	@echo "Dashboard will open at: http://localhost:9080/dashboard"
+	@echo "Press Ctrl+C to stop the service"
+	@echo ""
+	@# Start the service in background and open dashboard
+	@./bin/cuju & \
+	SERVER_PID=$$!; \
+	sleep 2; \
+	if command -v open >/dev/null 2>&1; then \
+		open http://localhost:9080/dashboard; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:9080/dashboard; \
+	elif command -v start >/dev/null 2>&1; then \
+		start http://localhost:9080/dashboard; \
+	else \
+		echo "Please open http://localhost:9080/dashboard in your browser"; \
+	fi; \
+	wait $$SERVER_PID
+
+# Run the application without opening browser
+run-simple: build
 	./bin/cuju
 
 # Run specific commands
@@ -121,7 +142,8 @@ stress-test:
 # Show common targets
 help:
 	@echo "make build        - build the binary"
-	@echo "make run          - build then run server"
+	@echo "make run          - build then run server (opens dashboard in browser)"
+	@echo "make run-simple   - build then run server (no browser)"
 	@echo "make gen-site     - generate documentation site"
 	@echo "make gen-openapi  - copy OpenAPI spec to swagger package"
 	@echo "make fetch-redoc  - fetch ReDoc JavaScript bundle"
