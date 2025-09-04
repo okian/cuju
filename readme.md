@@ -2,6 +2,19 @@
 
 A high-performance, in-memory leaderboard system designed for real-time talent scoring and ranking. The system processes performance events asynchronously, maintains idempotent event processing, and provides fast read access to leaderboard data.
 
+## 🚀 How to Run
+
+**Quick Start:**
+```bash
+make run
+```
+This will build the service, start it, and automatically open the dashboard in your browser at `http://localhost:9080/dashboard`.
+
+**Alternative:**
+```bash
+make run-simple  # Runs without opening browser
+```
+
 ## 📚 Documentation
 
 **Start here for comprehensive system understanding:**
@@ -25,6 +38,11 @@ make run-simple
 export CUJU_CONFIG=./config.yaml
 ./bin/cuju
 ```
+
+### First Steps
+1. Run `make run` to start the service
+2. Dashboard opens automatically at `http://localhost:9080/dashboard`
+3. Try the API examples below to test the system
 
 ### API Endpoints
 * **POST /events** - Submit performance events
