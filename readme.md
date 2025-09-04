@@ -1,22 +1,104 @@
-# CUJU Senior GO Engineer — System Design + Coding Task
+# CUJU Leaderboard System
 
-### Coding Task
+A high-performance, in-memory leaderboard system designed for real-time talent scoring and ranking. The system processes performance events asynchronously, maintains idempotent event processing, and provides fast read access to leaderboard data.
 
-A Leaderboard Ingest + Query service with idempotent event intake, concurrent processing, and fast reads—but all in one process with in-memory storage (no external deps).
+## 📚 Documentation
 
-Build a single Go service that accepts performance events, deduplicates by `event_id`, asynchronously "scores" them (simulate 80–150ms latency), and maintains an in-memory Global leaderboard (best score per talent).
+**Start here for comprehensive system understanding:**
 
-Expose:
+* **[🏗️ Complete Architecture Documentation](docs/ARCHITECTURE.md)** - Detailed system architecture, data structures, time complexities, and design patterns
+* **[📊 Data Structures & Algorithms](docs/DATA_STRUCTURES.md)** - Deep dive into treap implementation, sharding strategy, and complexity analysis  
+* **[🔄 Event Flow Sequence Diagram](docs/SEQUENCE_DIAGRAM.md)** - Visual representation of the complete event processing flow
+* **[⚡ Quick Reference Guide](docs/QUICK_REFERENCE.md)** - Developer quick start guide with API examples and configuration
 
-* **POST /events**
-* **GET /leaderboard?limit=N**
-* **GET /rank/{talent\_id}**
-* **/healthz**
+## 🚀 Quick Start
 
-Include a short design note, which should contain a sequence diagram with user interactions, a README with run/curl examples, and a few tests.
-Aim for 60–90 minutes; avoid over-engineering.
+### Run the Service
+```bash
+# Build and run
+make build
+make run
+
+# Or with custom config
+export CUJU_CONFIG=./config.yaml
+./bin/cuju
+```
+
+### API Endpoints
+* **POST /events** - Submit performance events
+* **GET /leaderboard?limit=N** - Get top N leaderboard entries  
+* **GET /rank/{talent_id}** - Get specific talent rank
+* **GET /healthz** - Health check
+* **GET /dashboard** - Web monitoring dashboard
+
+### Example Usage
+```bash
+# Submit an event
+curl -X POST http://localhost:9080/events \
+  -H "Content-Type: application/json" \
+  -d '{"event_id": "123e4567-e89b-12d3-a456-426614174000", "talent_id": "t1", "raw_metric": 42.5, "skill": "dribble", "ts": "2025-01-27T10:00:00Z"}'
+
+# Get leaderboard
+curl "http://localhost:9080/leaderboard?limit=10"
+
+# Get rank
+curl "http://localhost:9080/rank/t1"
+```
+
+## 🎯 System Overview
+
+**Core Features:**
+- **Idempotent Event Processing** - Duplicate events are detected and ignored
+- **Asynchronous Scoring** - Events processed in background workers with simulated ML latency
+- **Sharded Storage** - Data distributed across multiple shards for concurrent access
+- **Real-time Metrics** - Comprehensive Prometheus metrics for monitoring
+- **High Performance** - Optimized for sub-40ms read latencies
+
+**Key Design Decisions:**
+- **Treap Data Structure** - Chosen over simple maps for optimal Top-N query performance
+- **Sharded Architecture** - Enables concurrent updates while maintaining global ordering
+- **Fixed-Point Arithmetic** - Eliminates floating-point precision issues
+- **Read-Heavy Optimization** - Prioritizes leaderboard queries over individual updates
+
+## 🧪 Performance Testing & Validation
+
+This project includes comprehensive stress testing to validate repository performance under realistic production conditions:
+
+### 🚀 **Comprehensive Stress Testing**
+- **30M Talents**: Tests with 30 million talent records
+- **All APIs Simultaneously**: UpdateBest, Rank, TopN, and Count under pressure
+- **Realistic Workloads**: Production-like API call distribution
+- **Extended Duration**: 15-20 minute tests for stable metrics
+- **High Concurrency**: 2,000-5,000 concurrent workers
+
+### 📊 **Key Metrics Measured**
+- **P90, P95, P99 Latency**: Response time percentiles for production planning
+- **Throughput**: Operations per second for each API
+- **Success Rates**: Error handling and system stability
+- **Memory Usage**: Resource consumption under load
+- **Snapshot Impact**: Performance impact of periodic snapshots
+
+### 🧪 **Test Scenarios Available**
+- **Comprehensive**: Balanced workload, all APIs under pressure
+- **Extreme Pressure**: Maximum concurrency (5K workers), 20 minutes
+- **Write-Heavy**: 70% updates, heavy write operations
+- **Read-Heavy**: 50% rank queries, heavy read operations
+- **TopN-Heavy**: 50% topN queries, leaderboard performance
+
+### 🚦 **Quick Start**
+```bash
+# Run all stress test scenarios
+make bench-repo
+
+# Run individual comprehensive test
+go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
+    -benchmem -run=^$ ./internal/adapters/repository/ \
+    -timeout=30m -benchtime=15m
+```
 
 ---
+
+## 📋 Original Task Requirements
 
 ### Functional scope
 
@@ -60,50 +142,6 @@ Aim for 60–90 minutes; avoid over-engineering.
 * Basic performance: **p95 read < 40ms locally** for `GET /leaderboard?limit=50` after a burst of writes.
 * Minimal observability: `/healthz` + counters (processed events, dedup hits). (Prometheus optional.)
 
----
-
-### Performance Validation & Stress Testing
-
-This project includes comprehensive stress testing to validate repository performance under realistic production conditions:
-
-#### 🚀 **Comprehensive Stress Testing**
-- **30M Talents**: Tests with 30 million talent records
-- **All APIs Simultaneously**: UpdateBest, Rank, TopN, and Count under pressure
-- **Realistic Workloads**: Production-like API call distribution
-- **Extended Duration**: 15-20 minute tests for stable metrics
-- **High Concurrency**: 2,000-5,000 concurrent workers
-
-#### 📊 **Key Metrics Measured**
-- **P90, P95, P99 Latency**: Response time percentiles for production planning
-- **Throughput**: Operations per second for each API
-- **Success Rates**: Error handling and system stability
-- **Memory Usage**: Resource consumption under load
-- **Snapshot Impact**: Performance impact of periodic snapshots
-
-#### 🧪 **Test Scenarios Available**
-- **Comprehensive**: Balanced workload, all APIs under pressure
-- **Extreme Pressure**: Maximum concurrency (5K workers), 20 minutes
-- **Write-Heavy**: 70% updates, heavy write operations
-- **Read-Heavy**: 50% rank queries, heavy read operations
-- **TopN-Heavy**: 50% topN queries, leaderboard performance
-
-#### 🚦 **Quick Start**
-```bash
-# Run all stress test scenarios
-./scripts/run_stress_tests.sh
-
-# Run individual comprehensive test
-go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
-    -benchmem -run=^$ ./internal/adapters/repository/ \
-    -timeout=30m -benchtime=15m
-```
-
-#### 📚 **Documentation**
-- [Comprehensive Stress Testing Guide](docs/comprehensive_stress_testing.md)
-- [Quick Reference](docs/stress_test_quick_reference.md)
-- [Performance Analysis](docs/benchmarks.md)
-
----
 
 ### Example payloads
 
@@ -144,24 +182,11 @@ go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
 
 ---
 
-### System Design
-
-Comprehensive system design documentation is available in the `docs/` directory:
-
-* **[Complete Architecture Documentation](docs/ARCHITECTURE.md)** - Detailed system architecture, data structures, time complexities, and design patterns
-* **[Event Flow Sequence Diagram](docs/SEQUENCE_DIAGRAM.md)** - Visual representation of the complete event processing flow from user request to leaderboard storage
-* **[Data Structures & Algorithms](docs/DATA_STRUCTURES.md)** - Deep dive into treap implementation, sharding strategy, and complexity analysis
-* **[Quick Reference Guide](docs/QUICK_REFERENCE.md)** - Developer quick start guide with API examples and configuration
-
-#### Quick Design Summary
-
-**Data Model:**
-* `scores[talent_id] = bestScore` - Sharded treap-based storage
-* Ranking structure - O(log n) operations with deterministic tie-breaking
+## 🏗️ Architecture Summary
 
 **Key Components:**
 * **HTTP API Layer** - Request handling and validation
-* **Application Service** - Component orchestration and lifecycle
+* **Application Service** - Component orchestration and lifecycle  
 * **Repository Layer** - Sharded treap store for leaderboard data
 * **Message Queue** - Asynchronous event processing
 * **Worker Pool** - Concurrent event scoring
@@ -175,14 +200,53 @@ Comprehensive system design documentation is available in the `docs/` directory:
 * Rank Lookup: **O(n_shard × log n_shard)** - Global rank calculation
 * Update Operations: **O(log n_shard)** - Treap insert/update
 
-**Trade-offs:**
-* **In-Memory Storage** - Ultra-fast access vs. data persistence
-* **Sharded Architecture** - Concurrent writes vs. complex global operations
-* **Asynchronous Processing** - High throughput vs. eventual consistency
-* **Treap Data Structure** - Balanced performance vs. implementation complexity
-
-**MVP vs Production Scale:**
+**Scale:**
 * **MVP (Current)**: Single process, in-memory, < 1M talents, < 10K events/sec
 * **Production (30M AUs)**: Distributed architecture, persistent storage, advanced caching, load balancing
 
-For complete details, see the [Architecture Documentation](docs/ARCHITECTURE.md).
+For complete architectural details, see the [Architecture Documentation](docs/ARCHITECTURE.md).
+
+## 🛠️ Development
+
+### Build & Test
+```bash
+# Build the application
+make build
+
+# Run tests
+make test
+
+# Run benchmarks
+make bench
+
+# Run linting
+make lint
+
+# Run all checks
+make check
+```
+
+### Configuration
+Create `config.yaml` based on `config.example.yaml`:
+```yaml
+log_level: "info"
+addr: ":9080"
+queue_size: 100000
+worker_count: 16
+dedupe_size: 500000
+shard_count: 8
+max_leaderboard_limit: 100
+scoring_latency_min_ms: 80
+scoring_latency_max_ms: 150
+skill_weights:
+  dribble: 3.0
+  shooting: 2.0
+  passing: 1.2
+default_skill_weight: 1.5
+```
+
+### Monitoring
+- **Metrics**: `http://localhost:9080/metrics` (Prometheus format)
+- **Dashboard**: `http://localhost:9080/dashboard` (Web UI)
+- **Health**: `http://localhost:9080/healthz`
+- **Stats**: `http://localhost:9080/stats`
