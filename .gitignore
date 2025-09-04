@@ -1,0 +1,38 @@
+# OS/Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go build/test artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.test
+
+# Local caches and tmp
+.gocache/
+.cache/
+tmp/
+/tmp/
+
+# Env and secrets
+.env
+.env.*
+.envrc
+
+# Coverage and reports
+coverage.out
+*.coverprofile
+cover.out
+
+# Generated assets (go generate)
+internal/swagger/openapi.yaml
+internal/site/static/
+
+# Node/npm (if present in docs tooling)
+node_modules/
+

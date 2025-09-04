@@ -1,0 +1,240 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/docs/assets/site.css"><title>Leaderboard Ingest + Query Service – Technical Design</title></head><body><div class="layout"><aside id="sidebar"></aside><main><article><h1>Leaderboard Ingest + Query Service – Technical Design</h1>
+<p>**Language:** Go **Process Model:** Single-process, in-memory MVP **Author:** Kian Ostad **Status:** Final (MVP)</p>
+<p>---</p>
+<h2>1. Overview</h2>
+<p>The service ingests events, deduplicates by `event_id`, asynchronously scores them (80–150 ms simulated delay), and maintains an in-memory leader board tracking the best score per talent. Queries provide Top-N and per-talent rank. MVP prioritizes correctness, concurrency, and low-latency reads.</p>
+<p>---</p>
+<h2>2. Architecture</h2>
+<h3>2.1 Components</h3>
+<ul>
+<li>Event Handler (HTTP): validates payloads, enforces idempotency, enqueues new events.</li>
+<ul>
+<li>Scoring Worker(s): pulls from queue, computes score, updates store.</li>
+<ul>
+<li>Leaderboard Store: in-memory state with best scores and ranking.</li>
+<ul>
+<li>Query Handlers (HTTP): Top-N and rank lookups.</li>
+<ul>
+<li>Health & Metrics: `/healthz` endpoint and counters.</li>
+</ul>
+<h3>2.2 Component Diagram</h3>
+<p><pre><code>mermaid
+graph TD
+    subgraph HTTP Layer
+      EH[Event Handler] --&gt; Q[(Event Queue)]
+      Q -.-&gt; SW[Scoring Worker]
+      Q -.-&gt; SW2[Scoring Worker (optional)]
+      Q -.-&gt; SW3[Scoring Worker (optional)]
+      Q -.-&gt; SWN[...]
+      Qstyle[ ]:::hidden
+      LBQ[ ]:::hidden
+      Q --&gt;|Pull| SW
+      Q --&gt;|Pull| SW2
+      Q --&gt;|Pull| SW3
+    end
+    subgraph Storage
+      Store[(Leaderboard Store)]
+    end
+    EH --&gt; Store
+    SW --&gt;|Update| Store
+    Q --&gt;|Backpressure signal| EH
+    Q --&gt;|Backpressure signal| SW
+    QH[Query Handlers] --&gt; Store
+    classDef hidden fill-opacity:0,stroke-opacity:0</code></pre></p>
+<h3>2.3 Sequence Diagram (Event Lifecycle)</h3>
+<p><pre><code>mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as API Server
+    participant Q as Queue
+    participant W as Scoring Worker
+    participant S as Store
+
+    C-&gt;&gt;API: POST /events (event)
+    API-&gt;&gt;API: Validate + dedup(event_id)
+    alt New event
+        API-&gt;&gt;Q: Enqueue
+        API--&gt;&gt;C: 202 Accepted
+    else Duplicate
+        API--&gt;&gt;C: 200 OK (duplicate)
+    end
+    W-&gt;&gt;Q: Pull
+    W-&gt;&gt;W: Sleep 80–150 ms (simulate ML)
+    W-&gt;&gt;W: Compute score(raw_metric, skill)
+    W-&gt;&gt;S: Update bestScore(talent_id)
+    S-&gt;&gt;S: Maintain global rank</code></pre></p>
+<h3>2.4 State Diagram (Event Dedup + Processing)</h3>
+<p><pre><code>mermaid
+stateDiagram-v2
+    [*] --&gt; Received
+    Received --&gt; Duplicate: event_id exists
+    Duplicate --&gt; [*]
+    Received --&gt; Queued: new event_id
+    Queued --&gt; Scoring
+    Scoring --&gt; Updated: bestScore write
+    Updated --&gt; [*]</code></pre></p>
+<p>---</p>
+<h2>3. Data Model & Structures</h2>
+<ul>
+<li>Event</li>
+<p>- `event_id: string (uuid)`   - `talent_id: string`   - `raw_metric: float64|int`   - `skill: string`   - `ts: time`</p>
+<ul>
+<li>In-memory Store</li>
+<p>- `dedup: map[string]struct{}` (seen event_ids)   - `scores: map[string]float64` (best score per talent)   - `rank: []TalentScore` (sorted desc by score)   - `index: map[string]int` (talent_id → current rank index)   - `mu: sync.RWMutex` (guards all fields for MVP simplicity)</p>
+<p>Notes:</p>
+<ul>
+<li>Rank maintenance prefers simplicity for MVP: update `scores`, adjust `rank` slice, and update `index` map. For small-to-mid data sets, a sorted slice is acceptable; future: tree/skiplist.</li>
+<ul>
+<li>Alternative: `container/heap` gives top-1 efficiently but complicates arbitrary rank lookups.</li>
+</ul>
+<p>---</p>
+<h2>4. API Design</h2>
+<p>Endpoints follow `docs/openapi.yaml`. Highlights:</p>
+<ul>
+<li>`POST /events`</li>
+<p>- Request: `{ event_id, talent_id, raw_metric, skill, ts }`   - 202 on enqueue; 200 on duplicate.   - 400 on validation error.</p>
+<ul>
+<li>`GET /leaderboard?limit=N`</li>
+<p>- Returns `[ { rank, talent_id, score } ]`.   - 400 if invalid `limit` (non-positive or too large).</p>
+<ul>
+<li>`GET /rank/{talent_id}`</li>
+<p>- Returns `{ rank, talent_id, score }` or 404.</p>
+<ul>
+<li>`GET /healthz`</li>
+<p>- Returns `{ status: "ok" }`.</p>
+<p>Error Model:</p>
+<ul>
+<li>JSON error `{ code, message }` with appropriate HTTP status.</li>
+</ul>
+<p>---</p>
+<h2>5. Scoring Function (MVP)</h2>
+<p>`score = base(skill) * f(raw_metric)`</p>
+<ul>
+<li>Example: `base(dribble)=1.0`, `base(shot)=1.2`; `f(x)=x` for linear MVP.</li>
+<ul>
+<li>Latency: random uniform 80–150 ms to simulate external ML call.</li>
+</ul>
+<p>---</p>
+<h2>6. Concurrency Model</h2>
+<ul>
+<li>HTTP handlers run concurrently per request (Go net/http).</li>
+<ul>
+<li>Event Handler path:</li>
+<p>- Acquire read lock to check dedup; upgrade to write lock to insert new event_id.   - Enqueue to channel (non-blocking preferred; or bounded with backpressure).</p>
+<ul>
+<li>Workers:</li>
+<p>- Range over channel; sleep for simulated latency; compute score.   - Acquire write lock to update `scores`, adjust `rank` and `index`.</p>
+<ul>
+<li>Reads (leaderboard, rank): acquire read lock.</li>
+</ul>
+<p>Backpressure:</p>
+<ul>
+<li>Use bounded channel for events. If full, respond `429 Too Many Requests` with retry hint.</li>
+</ul>
+<p>---</p>
+<h2>7. Ranking Algorithm</h2>
+<ul>
+<li>On update for `talent_id` with `newScore`:</li>
+<p>- If `newScore <= scores[talent_id]`, ignore.   - Else set `scores[talent_id] = newScore`.   - Remove old position from `rank` (O(1) with swap+pop using `index`), reinsert at correct position (binary search O(log N) + slice insert O(N)).   - Update `index` map for affected entries.</p>
+<p>Complexity:</p>
+<ul>
+<li>Update worst-case O(N) for slice insert; acceptable for MVP scale.</li>
+<ul>
+<li>Top-N query: O(N) to take prefix; or pre-slice of first N.</li>
+<ul>
+<li>Rank lookup: O(1) via `index` map for current rank (plus 1 for 1-based rank).</li>
+</ul>
+<p>---</p>
+<h2>8. Performance & Capacity</h2>
+<ul>
+<li>Target read p95 < 40 ms for `N ≤ 50` under bursts of ≥1,000 events.</li>
+<ul>
+<li>Memory: O(T) where T = unique talents; every event adds at most one dedup entry and updates at most one talent.</li>
+<ul>
+<li>Worker pool size configurable; default `GOMAXPROCS` or fixed (e.g., 4) for MVP.</li>
+</ul>
+<p>---</p>
+<h2>9. Observability</h2>
+<ul>
+<li>Counters: `events_processed_total`, `events_duplicate_total`.</li>
+<ul>
+<li>Histogram (optional): `scoring_latency_ms`.</li>
+<ul>
+<li>Health: `/healthz` returns `{"status":"ok"}` when server running.</li>
+<ul>
+<li>Logging: structured logs for POST/GET and worker updates (info level), errors at warn/error.</li>
+</ul>
+<p>---</p>
+<h2>10. Configuration</h2>
+<ul>
+<li>`EVENT_QUEUE_SIZE` (default: 10_000)</li>
+<ul>
+<li>`WORKER_COUNT` (default: 4)</li>
+<ul>
+<li>`MAX_LEADERBOARD_LIMIT` (default: 100)</li>
+<ul>
+<li>`SCORING_LATENCY_MIN_MS` (default: 80)</li>
+<ul>
+<li>`SCORING_LATENCY_MAX_MS` (default: 150)</li>
+</ul>
+<p>---</p>
+<h2>11. Testing Strategy</h2>
+<ul>
+<li>Unit: dedup logic; score computation; rank update correctness; index map integrity.</li>
+<ul>
+<li>Concurrency: parallel POSTs, ensure no data races (run with `-race`).</li>
+<ul>
+<li>Integration: burst of events, then GET leaderboard and rank.</li>
+<ul>
+<li>Performance: measure read p95 under synthetic load.</li>
+</ul>
+<p>---</p>
+<h2>12. Deployment & Operations</h2>
+<ul>
+<li>Single container binary; health endpoint used for k8s liveness/readiness (future).</li>
+<ul>
+<li>Run with bounded queue to avoid OOM under spikes.</li>
+<ul>
+<li>On crash: state lost (MVP). Future: persist.</li>
+</ul>
+<p>Runbook (MVP):</p>
+<ul>
+<li>If 429s increase: increase queue size or worker count; scale CPU.</li>
+<ul>
+<li>If read latency > SLO: investigate lock contention, reduce worker count, or optimize ranking updates.</li>
+</ul>
+<p>---</p>
+<h2>13. Security Considerations</h2>
+<ul>
+<li>Validate input types and bounds.</li>
+<ul>
+<li>Rate limiting out of scope (MVP); plan for API keys/JWT.</li>
+<ul>
+<li>No PII in logs; redact large payloads.</li>
+</ul>
+<p>---</p>
+<h2>14. Limitations & Future Work</h2>
+<ul>
+<li>In-memory only; no durability.</li>
+<ul>
+<li>Slice-based ranking not ideal for very large T; consider tree/skiplist or external store.</li>
+<ul>
+<li>Single process; future: shard by region and merge for global leaderboard.</li>
+</ul>
+<p>---</p>
+<h2>15. Data Model Diagram</h2>
+<p><pre><code>mermaid
+classDiagram
+    class Store {
+      +map~string,float64~ scores
+      +map~string,int~ index
+      +[]TalentScore rank
+      +map~string,struct{}~ dedup
+      +RWMutex mu
+    }
+    class TalentScore {
+      +string talent_id
+      +float64 score
+    }
+    Store --&gt; TalentScore</code></pre></p>
+</article></main></div><script src="/docs/assets/site.js"></script></body></html>

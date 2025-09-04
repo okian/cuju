@@ -1,0 +1,275 @@
+run:
+  timeout: 5m
+  go: "1.24"
+  modules-download-mode: readonly
+  skip-dirs:
+    - vendor
+    - internal/swagger
+    - internal/adapters/swagger
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_embed\\.go$"
+  tests: true
+  build-tags:
+    - integration
+    - e2e
+
+linters:
+  enable:
+    # Code formatting and imports
+    - gofmt
+    - goimports
+    - gci
+    
+    # Go vet and related
+    - govet
+    - shadow
+    
+    # Error handling
+    - errcheck
+    - errorlint
+    - wrapcheck
+    
+    # Static analysis
+    - staticcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - deadcode
+    - typecheck
+    
+    # Code complexity and maintainability
+    - gocyclo
+    - goconst
+    - gomnd
+    - dupl
+    - funlen
+    - nestif
+    - gocognit
+    - gocritic
+    
+    # Security
+    - gosec
+    
+    # Performance
+    - prealloc
+    - makezero
+    
+    # Style and conventions
+    - misspell
+    - revive
+    - nakedret
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - whitespace
+    - exportloopref
+    - gochecknoinits
+    - gochecknoglobals
+    - goprintffuncname
+    - nolintlint
+    - structcheck
+    - stylecheck
+    - varcheck
+    
+    # Documentation
+    - godot
+    - godox
+    
+    # Additional checks
+    - forbidigo
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/okian/cuju
+  
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/okian/cuju)
+    skip-generated: true
+    skip-vendor: true
+  
+  gocyclo:
+    min-complexity: 15
+  
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  
+  gomnd:
+    settings:
+      mnd:
+        checks: argument,case,condition,operation,return,assign
+        ignored-numbers: 0,1,2,3,4,5,10,100,1000
+        ignored-functions: strings.SplitN,strings.SplitAfterN,bytes.SplitN,bytes.SplitAfterN
+        ignored-functions: strings.Replace,bytes.Replace,strings.ReplaceAll,bytes.ReplaceAll
+        ignored-functions: strings.TrimPrefix,strings.TrimSuffix,bytes.TrimPrefix,bytes.TrimSuffix
+  
+  dupl:
+    threshold: 100
+  
+  funlen:
+    lines: 100
+    statements: 50
+  
+  nestif:
+    min-complexity: 5
+  
+  gocognit:
+    min-complexity: 20
+  
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+  
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G204
+      - G304
+      - G401
+      - G402
+      - G404
+      - G501
+      - G502
+      - G503
+      - G504
+      - G505
+  
+  revive:
+    min-confidence: 0.8
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+  
+  godot:
+    scope: declarations
+    exclude:
+      - "^//go:generate "
+      - "^//nolint"
+      - "^//nolint:"
+  
+  godox:
+    keywords:
+      - NOTE
+      - OPTIMIZE
+      - HACK
+      - TODO
+      - BUG
+      - FIXME
+  
+  forbidigo:
+    forbid:
+      - '^print.*$'
+      - '^fmt\.Print.*$'
+      - '^fmt\.Fprint.*$'
+      - '^fmt\.Sprint.*$'
+      - '^log\.Print.*$'
+      - '^log\.Fatal.*$'
+      - '^log\.Panic.*$'
+    exclude-use-default: false
+  
+  nolintlint:
+    allow-leading-space: true
+    allow-unused: false
+    require-explanation: false
+    require-specific: false
+
+issues:
+  exclude-rules:
+    # Test files - more lenient rules
+    - path: _test\.go
+      linters:
+        - gomnd
+        - goconst
+        - dupl
+        - gocyclo
+        - funlen
+        - gocognit
+        - nestif
+        - gochecknoinits
+        - gochecknoglobals
+        - forbidigo
+        - gosec
+        - godot
+        - godox
+    
+    # Generated files - exclude all linters
+    - path: internal/swagger/
+      linters:
+        - all
+    - path: internal/site/static_embed.go
+      linters:
+        - all
+    - path: internal/swagger/assets_embed.go
+      linters:
+        - all
+    - path: internal/swagger/openapi_embed.go
+      linters:
+        - all
+    - path: internal/adapters/http/site/static_embed.go
+      linters:
+        - all
+    - path: internal/adapters/swagger/openapi_embed.go
+      linters:
+        - all
+    
+    # Vendor directory
+    - path: vendor/
+      linters:
+        - all
+    
+    # Exclude specific linters for specific patterns
+    - text: "Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked"
+      linters:
+        - errcheck
+    
+    - text: "exported (.+) should have comment or be unexported"
+      linters:
+        - golint
+        - revive
+    
+    - text: "should have a package comment"
+      linters:
+        - golint
+        - revive
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-use-default: false
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
+    - "exported (.+) should have comment or be unexported"
+    - "should have a package comment"

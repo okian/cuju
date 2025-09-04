@@ -1,0 +1,163 @@
+openapi: 3.0.3
+info:
+  title: CUJU Leaderboard API
+  version: 1.0.0-mvp
+  description: In-memory leaderboard ingest and query service
+servers:
+  - url: http://127.0.0.1:9080
+paths:
+  /events:
+    post:
+      summary: Ingest a performance event
+      operationId: postEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '202':
+          description: Accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+        '200':
+          description: Duplicate event (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Backpressure (queue full)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /leaderboard:
+    get:
+      summary: Get Top-N leaderboard
+      operationId: getLeaderboard
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          required: true
+          description: Number of results to return
+      responses:
+        '200':
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaderboardEntry'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /rank/{talent_id}:
+    get:
+      summary: Get rank for a talent
+      operationId: getRank
+      parameters:
+        - in: path
+          name: talent_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rank and score for talent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardEntry'
+        '404':
+          description: Talent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /healthz:
+    get:
+      summary: Health check
+      operationId: healthz
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    Event:
+      type: object
+      required: [event_id, talent_id, raw_metric, skill, ts]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        talent_id:
+          type: string
+        raw_metric:
+          oneOf:
+            - type: number
+            - type: integer
+        skill:
+          type: string
+        ts:
+          type: string
+          format: date-time
+    LeaderboardEntry:
+      type: object
+      required: [rank, talent_id, score]
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+        talent_id:
+          type: string
+        score:
+          type: number
+          format: double
+    Ack:
+      type: object
+      properties:
+        status:
+          type: string
+          example: accepted
+        duplicate:
+          type: boolean
+          example: false
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: bad_request
+        message:
+          type: string
+          example: invalid parameter 'limit'
+

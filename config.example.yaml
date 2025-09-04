@@ -1,0 +1,45 @@
+# Cuju service configuration (Koanf YAML)
+#
+# Usage:
+#   1) Copy this file to a desired location, e.g. ~/.config/cuju/config.yaml
+#   2) Point the service to it via the CUJU_CONFIG environment variable:
+#        export CUJU_CONFIG=~/.config/cuju/config.yaml
+#   3) Environment variables can override any of these values with prefix CUJU_
+#      (e.g., CUJU_ADDR, CUJU_QUEUE_SIZE). See `internal/config/loader.go`.
+
+# Logging level: debug | info | warn | error (default: info)
+log_level: "info"
+
+# HTTP listen address (e.g., ":9080", "127.0.0.1:9080")
+addr: ":9080"
+
+# In-memory event queue capacity (default: 100000)
+queue_size: 100000
+
+# Number of scoring workers. If omitted, defaults to 10 x CPU cores.
+# Uncomment to set explicitly.
+# worker_count: 16
+
+# Deduplication cache size (default: 500000)
+dedupe_size: 500000
+
+# Number of shards for the leaderboard store (default: 8)
+shard_count: 16
+
+# Max value for GET /leaderboard?limit (default: 100)
+max_leaderboard_limit: 500
+
+# Simulated scoring latency bounds (milliseconds) (defaults: 80 min, 150 max)
+scoring_latency_min_ms: 80
+scoring_latency_max_ms: 150
+
+# Skill weights used by the scoring service (float values)
+skill_weights:
+  dribble: 3.0
+  shooting: 2.0
+  passing: 1.2
+
+# Default weight used when a skill is not found in skill_weights (default: 1.5)
+default_skill_weight: 1.5
+
+

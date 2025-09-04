@@ -1,0 +1,202 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/docs/assets/site.css"><title>Product Requirements Document (PRD)</title></head><body><div class="layout"><aside id="sidebar"></aside><main><article><h1>Product Requirements Document (PRD)</h1>
+<p>**Product:** Leaderboard Ingest + Query Service **Owner:** CUJU Engineering **Author:** Kian Ostad **Date:** 2025-09-01 **Status:** Final (MVP)</p>
+<p>---</p>
+<h2>1. Summary</h2>
+<p>A lightweight Go service that ingests player performance events, deduplicates by `event_id`, asynchronously computes a score (to simulate ML latency), and maintains an in-memory global leaderboard storing each talent’s best score. The service exposes endpoints for event intake, top-N leaderboard queries, per-talent rank lookup, and health checks. MVP focuses on correctness, concurrency, and low-latency reads without external dependencies.</p>
+<p>---</p>
+<h2>2. Background & Context</h2>
+<p>CUJU requires a fast, simple way to rank players based on incoming performance signals. The MVP demonstrates core behavior and lays groundwork for future persistence and scale-out. Prior discussions set constraints: single-process Go service, in-memory storage, and simulated scoring latency.</p>
+<p>---</p>
+<h2>3. Problem Statement</h2>
+<p>We need to:</p>
+<ul>
+<li>Ingest performance events reliably with idempotency.</li>
+<ul>
+<li>Compute scores asynchronously with simulated delay.</li>
+<ul>
+<li>Maintain a global leaderboard using best score per talent.</li>
+<ul>
+<li>Support fast queries for top-N and per-talent rank.</li>
+<ul>
+<li>Provide basic health and counters for observability.</li>
+</ul>
+<p>---</p>
+<h2>4. Users & Personas</h2>
+<ul>
+<li>**Client App:** Sends events and reads leaderboard for UI.</li>
+<ul>
+<li>**Game Analyst:** Queries top-N to review competitive standings.</li>
+<ul>
+<li>**Player:** Checks personal rank and score.</li>
+<ul>
+<li>**Operator:** Monitors health and counters.</li>
+</ul>
+<p>---</p>
+<h2>5. Goals</h2>
+<h3>Functional</h3>
+<ul>
+<li>Event intake: Idempotent `POST /events`.</li>
+<ul>
+<li>Asynchronous scoring: apply scoring function with 80–150 ms simulated latency.</li>
+<ul>
+<li>Leaderboard maintenance: per-talent best score and global ranking.</li>
+<ul>
+<li>Queries:</li>
+<p>- `GET /leaderboard?limit=N` → Top-N.   - `GET /rank/{talent_id}` → Rank + score.</p>
+<ul>
+<li>Health check: `GET /healthz`.</li>
+</ul>
+<h3>Non-Functional</h3>
+<ul>
+<li>Concurrency-safe event processing and ranking.</li>
+<ul>
+<li>Read latency: p95 < 40 ms for leaderboard queries with `N ≤ 50` under bursty writes.</li>
+<ul>
+<li>Basic observability: counters for processed and duplicate events.</li>
+</ul>
+<h3>Success Criteria (MVP)</h3>
+<ul>
+<li>Handles concurrent POSTs without data races or logical corruption.</li>
+<ul>
+<li>Returns consistent leaderboard view after scoring completes.</li>
+<ul>
+<li>Meets read p95 target during a burst of ≥1,000 events.</li>
+</ul>
+<p>---</p>
+<h2>6. Out of Scope (MVP)</h2>
+<ul>
+<li>Persistent storage (in-memory only).</li>
+<ul>
+<li>Multi-instance clustering or multi-region setup.</li>
+<ul>
+<li>Authentication/authorization and rate limiting.</li>
+<ul>
+<li>Complex ML models (use simple weighted scoring).</li>
+</ul>
+<p>---</p>
+<h2>7. Assumptions & Constraints</h2>
+<ul>
+<li>Implemented in Go, single-process, no external databases or caches.</li>
+<ul>
+<li>Simulated scoring delay uniformly random in 80–150 ms range.</li>
+<ul>
+<li>Memory footprint sufficient for expected MVP dataset in a single process.</li>
+<ul>
+<li>Leaderboard stores only best score per talent (no historical timeline).</li>
+</ul>
+<p>---</p>
+<h2>8. Detailed Requirements</h2>
+<h3>8.1 API Endpoints</h3>
+<ul>
+<li>`POST /events`</li>
+<p>- Idempotent on `event_id`.   - Returns `202 Accepted` when queued; `200 OK` with duplicate note when ignored.</p>
+<ul>
+<li>`GET /leaderboard?limit=N`</li>
+<p>- Returns array of `{rank, talent_id, score}` ordered by score desc.</p>
+<ul>
+<li>`GET /rank/{talent_id}`</li>
+<p>- Returns `{rank, talent_id, score}` or 404 if unknown.</p>
+<ul>
+<li>`GET /healthz`</li>
+<p>- Returns `200 OK` with simple JSON status.</p>
+<p>Reference OpenAPI spec: `docs/openapi.yaml`.</p>
+<h3>8.2 Data Model</h3>
+<ul>
+<li>`scores[talent_id] = bestScore` (float64)</li>
+<ul>
+<li>Ranking structure maintains global ordering by bestScore.</li>
+</ul>
+<h3>8.3 Concurrency</h3>
+<ul>
+<li>Concurrent POST handling with idempotency enforced on `event_id`.</li>
+<ul>
+<li>Asynchronous scoring via worker(s) processing an in-memory queue/channel.</li>
+<ul>
+<li>RW locks protect leaderboard updates and reads.</li>
+</ul>
+<h3>8.4 Observability</h3>
+<ul>
+<li>Counter: `events_processed_total`.</li>
+<ul>
+<li>Counter: `events_duplicate_total`.</li>
+<ul>
+<li>Optional histogram: scoring latency distribution (simulated).</li>
+</ul>
+<h3>8.5 Performance & Reliability</h3>
+<ul>
+<li>Read p95 < 40 ms (N ≤ 50) during bursts of ≥1,000 events.</li>
+<ul>
+<li>Writes are eventually consistent; newly scored updates appear within ~200 ms on average.</li>
+<ul>
+<li>No durability guarantees (process crash loses state).</li>
+</ul>
+<h3>8.6 Security</h3>
+<ul>
+<li>MVP: no authn/authz. Future: API key/JWT.</li>
+<ul>
+<li>Input validation on types/ranges; reject malformed payloads.</li>
+</ul>
+<p>---</p>
+<h2>9. User Stories & Acceptance Criteria</h2>
+<ul>
+<li>As a client app, I POST performance events so scores can be recorded.</li>
+<p>- Given a new `event_id`, when I `POST /events`, then I receive `202` and the event is eventually scored and reflected on leaderboard.   - Given a duplicate `event_id`, when I `POST /events`, then I receive `200` with duplicate indication and no state change.</p>
+<ul>
+<li>As an analyst, I query the top-N leaderboard to display rankings.</li>
+<p>- Given existing scores, when I `GET /leaderboard?limit=10`, then I receive a list of up to 10 entries ordered by score desc with rank numbers starting at 1.</p>
+<ul>
+<li>As a player, I check my rank and score.</li>
+<p>- Given my talent has a stored score, when I `GET /rank/{talent_id}`, then I receive my current rank and score; otherwise `404` for unknown talent.</p>
+<ul>
+<li>As an operator, I monitor service status.</li>
+<p>- When I `GET /healthz`, I receive `200` with a simple status JSON.</p>
+<p>---</p>
+<h2>10. KPIs</h2>
+<ul>
+<li>Read latency p95 for `GET /leaderboard?limit=50` under write bursts.</li>
+<ul>
+<li>Duplicate suppression rate under synthetic duplicate load.</li>
+<ul>
+<li>Worker throughput (events/sec) under simulated latency.</li>
+</ul>
+<p>---</p>
+<h2>11. Release Plan</h2>
+<ul>
+<li>MVP: single-node in-memory service, Dockerized, basic metrics.</li>
+<ul>
+<li>Beta: add persistence (Redis/Postgres), structured logs, rate limiting.</li>
+<ul>
+<li>GA: horizontal scaling, sharded leaderboards, authn/authz, SLOs.</li>
+</ul>
+<p>---</p>
+<h2>12. Risks & Mitigations</h2>
+<ul>
+<li>In-memory loss on crash → Accept for MVP; add persistence next.</li>
+<ul>
+<li>Hot talent churn reorders leaderboard frequently → Optimize structure and locking; cap updates per interval if needed.</li>
+<ul>
+<li>Duplicate storms → Efficient dedup map and bounded queue with backpressure.</li>
+</ul>
+<p>---</p>
+<h2>13. Future Considerations</h2>
+<ul>
+<li>Persistence layer for durability and restarts.</li>
+<ul>
+<li>Regional shards with periodic global merge.</li>
+<ul>
+<li>Real ML scoring service and feature store.</li>
+<ul>
+<li>Authentication/authorization and quota management.</li>
+</ul>
+<p>---</p>
+<h2>14. High-level Diagram</h2>
+<p><pre><code>mermaid
+flowchart LR
+    Client[Client Apps] --&gt;|POST /events| API[(Leaderboard API)]
+    API --&gt;|Dedup + Queue| Q[(In-Memory Queue)]
+    W[Scoring Worker] --&gt;|Pull| Q
+    W --&gt;|Update| Store[(Leaderboard Store)]
+    Client --&gt;|GET /leaderboard, /rank| API
+    API --&gt;|Read| Store
+    API --&gt;|/healthz| Client</code></pre></p>
+</article></main></div><script src="/docs/assets/site.js"></script></body></html>
