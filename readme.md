@@ -15,6 +15,11 @@ This will build the service, start it, and automatically open the dashboard in y
 make run-simple  # Runs without opening browser
 ```
 
+**Docker:**
+```bash
+docker-compose up -d  # Run with Docker
+```
+
 ## 📚 Documentation
 
 **Start here for comprehensive system understanding:**
@@ -265,8 +270,25 @@ skill_weights:
 default_skill_weight: 1.5
 ```
 
+### Docker
+```bash
+# Build and run with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+
+# Run with monitoring stack (Prometheus + Grafana)
+docker-compose --profile monitoring up -d
+```
+
 ### Monitoring
 - **Metrics**: `http://localhost:9080/metrics` (Prometheus format)
 - **Dashboard**: `http://localhost:9080/dashboard` (Web UI)
 - **Health**: `http://localhost:9080/healthz`
 - **Stats**: `http://localhost:9080/stats`
+- **Prometheus**: `http://localhost:9090` (if monitoring profile enabled)
+- **Grafana**: `http://localhost:3000` (if monitoring profile enabled)
