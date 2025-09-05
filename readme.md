@@ -17,7 +17,8 @@ make run-simple  # Runs without opening browser
 
 **Docker:**
 ```bash
-docker-compose up -d  # Run with Docker
+docker build -t cuju .
+docker run -p 9080:9080 cuju  # Run with Docker
 ```
 
 ## 📚 Documentation
@@ -270,17 +271,14 @@ default_skill_weight: 1.5
 
 ### Docker
 ```bash
-# Build and run with Docker Compose
-docker-compose up -d
+# Build the Docker image
+docker build -t cuju .
 
-# View logs
-docker-compose logs -f
+# Run the container
+docker run -p 9080:9080 cuju
 
-# Stop services
-docker-compose down
-
-# Run with monitoring stack (Prometheus + Grafana)
-docker-compose --profile monitoring up -d
+# Run with custom config
+docker run -p 9080:9080 -v $(pwd)/config.yaml:/app/config.yaml cuju
 ```
 
 ### Monitoring
