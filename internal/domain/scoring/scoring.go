@@ -102,7 +102,7 @@ func (s *InMemoryScorer) Score(ctx context.Context, in Input) (Result, error) {
 	latency := s.minLatency + time.Duration(s.rng.Int63n(int64(s.maxLatency-s.minLatency)))
 	select {
 	case <-ctx.Done():
-		return Result{}, ctx.Err()
+		return Result{}, ctx.Err() //nolint:wrapcheck // context.Err() should be returned directly for proper context cancellation handling
 	case <-time.After(latency):
 		// Continue with scoring
 	}
