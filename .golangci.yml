@@ -1,16 +1,7 @@
-version: 2
-
 run:
   timeout: 5m
   go: "1.23"
   modules-download-mode: readonly
-  skip-dirs:
-    - vendor
-    - internal/swagger
-    - internal/adapters/swagger
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*_embed\\.go$"
   tests: true
   build-tags:
     - integration
@@ -199,6 +190,13 @@ linters-settings:
     require-specific: false
 
 issues:
+  exclude-dirs:
+    - vendor
+    - internal/swagger
+    - internal/adapters/swagger
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*_embed\\.go$"
   exclude-rules:
     # Test files - more lenient rules
     - path: _test\.go
