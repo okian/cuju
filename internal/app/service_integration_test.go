@@ -120,7 +120,7 @@ func TestServiceIntegration(t *testing.T) {
 					entry, err := svc.Rank(ctx, "talent-1")
 					So(err, ShouldBeNil)
 					So(entry.TalentID, ShouldEqual, "talent-1")
-					So(entry.Score, ShouldEqual, 95.0) // Should have the higher score
+					So(entry.Score, ShouldEqual, 100.0) // Should have the higher score (95.0 * 1.5 = 142.5, capped at 100)
 					So(entry.Rank, ShouldBeGreaterThan, 0)
 				})
 			})

@@ -133,7 +133,7 @@ go test -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
 - **[Complete Architecture](ARCHITECTURE.md)** - Detailed system design
 - **[Sequence Diagram](SEQUENCE_DIAGRAM.md)** - Event flow visualization
 - **[OpenAPI Spec](openapi.yaml)** - API specification
-- **[Stress Testing Guide](comprehensive_stress_testing.md)** - Performance testing
+- **[Data Structures](DATA_STRUCTURES.md)** - Performance testing and complexity analysis
 
 ## 🚨 Troubleshooting
 

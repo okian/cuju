@@ -14,8 +14,8 @@ Welcome to the comprehensive documentation for the CUJU leaderboard system. This
 - **[OpenAPI Specification](openapi.yaml)** - Complete API specification with request/response schemas
 
 ### 🧪 Testing & Performance
-- **[Comprehensive Stress Testing Guide](comprehensive_stress_testing.md)** - Performance testing and benchmarking
-- **[Benchmarks](benchmarks.md)** - Performance analysis and optimization insights
+- **[Data Structures & Algorithms](DATA_STRUCTURES.md)** - Performance analysis and complexity insights
+- **[Architecture Documentation](ARCHITECTURE.md)** - Performance characteristics and scaling considerations
 
 ## 🎯 Quick Navigation
 
@@ -30,9 +30,9 @@ Welcome to the comprehensive documentation for the CUJU leaderboard system. This
 3. Analyze [Data Structures](DATA_STRUCTURES.md) for performance characteristics
 
 ### For Performance Engineers
-1. Start with [Stress Testing Guide](comprehensive_stress_testing.md)
-2. Review [Benchmarks](benchmarks.md) for performance baselines
-3. Check [Data Structures](DATA_STRUCTURES.md) for complexity analysis
+1. Start with [Data Structures](DATA_STRUCTURES.md) for complexity analysis
+2. Review [Architecture Documentation](ARCHITECTURE.md) for performance baselines
+3. Check [Quick Reference](QUICK_REFERENCE.md) for testing commands
 
 ## 🔍 Key Topics Covered
 

@@ -15,7 +15,7 @@ import (
 
 // Default worker configuration constants.
 const (
-	defaultWorkerMultiplier = 4 // multiplier for runtime.NumCPU()
+	defaultWorkerMultiplier = 20 // multiplier for runtime.NumCPU()
 	metricsUpdateInterval   = 5 * time.Second
 	workerShutdownTimeout   = 5 * time.Second
 	poolShutdownTimeout     = 30 * time.Second

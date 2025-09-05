@@ -23,10 +23,10 @@ import (
 
 // Default service configuration constants.
 const (
-	defaultWorkerMultiplier  = 2 // multiplier for runtime.NumCPU()
-	defaultQueueSize         = 100000
-	defaultDedupeSize        = 50000
-	defaultSkillWeight       = 0.5
+	defaultWorkerMultiplier  = 20 // multiplier for runtime.NumCPU()
+	defaultQueueSize         = 200000
+	defaultDedupeSize        = 500000
+	defaultSkillWeight       = 1.5
 	defaultScoringMinLatency = 80 * time.Millisecond
 	defaultScoringMaxLatency = 150 * time.Millisecond
 )
@@ -146,11 +146,11 @@ func WithScoringLatencyRange(min, max time.Duration) Option {
 // New constructs a new Service with default configuration.
 func New(opts ...Option) *Service {
 	s := &Service{
-		workerCount: runtime.NumCPU() * defaultWorkerMultiplier, // Default to 2x CPU cores
+		workerCount: runtime.NumCPU() * defaultWorkerMultiplier, // Default to 20x CPU cores
 		queueSize:   defaultQueueSize,                           // Default queue size
 		dedupeSize:  defaultDedupeSize,                          // Default dedupe cache size
 		skillWeights: map[string]float64{
-			"coding": 1.0,
+			"dribble": 3.0,
 		},
 		defaultWeight:     defaultSkillWeight,
 		stopCh:            make(chan struct{}),

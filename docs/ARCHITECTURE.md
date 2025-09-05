@@ -118,7 +118,7 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 
 **Data Structure**: Goroutine Pool
 - **Purpose**: Concurrent event processing
-- **Scaling**: CPU-based worker count (default: 10x CPU cores)
+- **Scaling**: CPU-based worker count (default: 20x CPU cores)
 
 **Time Complexities**:
 - Event Processing: **O(1)** per worker

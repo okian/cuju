@@ -257,7 +257,7 @@ Create `config.yaml` based on `config.example.yaml`:
 ```yaml
 log_level: "info"
 addr: ":9080"
-queue_size: 100000
+queue_size: 200000
 # worker_count: 16  # Defaults to 20x CPU cores
 dedupe_size: 500000
 scoring_latency_min_ms: 80
