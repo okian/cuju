@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -76,6 +77,7 @@ type InMemoryScorer struct {
 	maxLatency time.Duration
 	// Random seed for deterministic scoring
 	rng *rand.Rand
+	mu  sync.Mutex // protects the random number generator
 }
 
 // NewInMemoryScorer creates a new in-memory scorer with configuration options.
@@ -99,7 +101,9 @@ func NewInMemoryScorer(opts ...Option) *InMemoryScorer {
 // Score computes a score for the given input.
 func (s *InMemoryScorer) Score(ctx context.Context, in Input) (Result, error) {
 	// Simulate ML service latency
+	s.mu.Lock()
 	latency := s.minLatency + time.Duration(s.rng.Int63n(int64(s.maxLatency-s.minLatency)))
+	s.mu.Unlock()
 	select {
 	case <-ctx.Done():
 		return Result{}, ctx.Err() //nolint:wrapcheck // context.Err() should be returned directly for proper context cancellation handling
