@@ -7,24 +7,24 @@ import (
 	"strconv"
 )
 
-// LeaderboardDependencies defines the interface for leaderboard operations
+// LeaderboardDependencies defines the interface for leaderboard operations.
 type LeaderboardDependencies interface {
 	TopN(ctx context.Context, n int) ([]Entry, error)
 }
 
-// LeaderboardHandler handles leaderboard requests
+// LeaderboardHandler handles leaderboard requests.
 type LeaderboardHandler struct {
 	deps LeaderboardDependencies
 }
 
-// NewLeaderboardHandler creates a new leaderboard handler
+// NewLeaderboardHandler creates a new leaderboard handler.
 func NewLeaderboardHandler(deps LeaderboardDependencies) *LeaderboardHandler {
 	return &LeaderboardHandler{
 		deps: deps,
 	}
 }
 
-// HandleGetLeaderboard handles GET /leaderboard?limit=N requests
+// HandleGetLeaderboard handles GET /leaderboard?limit=N requests.
 func (h *LeaderboardHandler) HandleGetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)

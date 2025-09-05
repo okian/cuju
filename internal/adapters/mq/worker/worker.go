@@ -13,6 +13,14 @@ import (
 	"github.com/okian/cuju/pkg/metrics"
 )
 
+// Default worker configuration constants.
+const (
+	defaultWorkerMultiplier = 4 // multiplier for runtime.NumCPU()
+	metricsUpdateInterval   = 5 * time.Second
+	workerShutdownTimeout   = 5 * time.Second
+	poolShutdownTimeout     = 30 * time.Second
+)
+
 // Event abstracts what workers read off the queue.
 // Using the model.Event type for consistency.
 type Event = model.Event
@@ -44,7 +52,7 @@ type Worker interface {
 	Shutdown(ctx context.Context) error
 }
 
-// InMemoryWorker implements Worker for processing events
+// InMemoryWorker implements Worker for processing events.
 type InMemoryWorker struct {
 	queue   Queue
 	scorer  Scorer
@@ -87,7 +95,7 @@ func NewInMemoryWorker(queue Queue, scorer Scorer, updater Updater, opts ...Opti
 	return w
 }
 
-// Run starts the worker loop
+// Run starts the worker loop.
 func (w *InMemoryWorker) Run(ctx context.Context) {
 	defer func() {
 		close(w.done)
@@ -114,7 +122,7 @@ func (w *InMemoryWorker) Run(ctx context.Context) {
 	}
 }
 
-// Shutdown gracefully stops the worker
+// Shutdown gracefully stops the worker.
 func (w *InMemoryWorker) Shutdown(ctx context.Context) error {
 
 	// Signal shutdown
@@ -126,11 +134,11 @@ func (w *InMemoryWorker) Shutdown(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		w.logger.Warn(ctx, "shutdown timed out")
-		return ctx.Err()
+		return fmt.Errorf("shutdown timed out: %w", ctx.Err())
 	}
 }
 
-// processEvent handles a single event
+// processEvent handles a single event.
 func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) error {
 	// Track overall processing latency
 	start := time.Now()
@@ -179,7 +187,7 @@ func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) er
 			logger.String("eventID", event.EventID),
 			logger.Error(err),
 		)
-		return err
+		return fmt.Errorf("leaderboard update failed: %w", err)
 	}
 
 	if updated {
@@ -191,7 +199,7 @@ func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) er
 	return nil
 }
 
-// WorkerPool manages multiple workers
+// WorkerPool manages multiple workers.
 type WorkerPool struct {
 	workers []*InMemoryWorker
 	queue   Queue
@@ -210,10 +218,10 @@ type WorkerPool struct {
 	logger logger.Logger
 }
 
-// NewWorkerPool creates a new worker pool
+// NewWorkerPool creates a new worker pool.
 func NewWorkerPool(workerCount int, queue Queue, scorer Scorer, updater Updater) *WorkerPool {
 	if workerCount < 1 {
-		workerCount = runtime.NumCPU() * 4
+		workerCount = runtime.NumCPU() * defaultWorkerMultiplier
 	}
 
 	pool := &WorkerPool{
@@ -244,7 +252,7 @@ func NewWorkerPool(workerCount int, queue Queue, scorer Scorer, updater Updater)
 	return pool
 }
 
-// Start starts all workers in the pool
+// Start starts all workers in the pool.
 func (p *WorkerPool) Start(ctx context.Context) {
 	for _, worker := range p.workers {
 		go worker.Run(ctx)
@@ -254,9 +262,9 @@ func (p *WorkerPool) Start(ctx context.Context) {
 	go p.startMetricsUpdater(ctx)
 }
 
-// startMetricsUpdater starts a background goroutine that updates worker metrics
+// startMetricsUpdater starts a background goroutine that updates worker metrics.
 func (p *WorkerPool) startMetricsUpdater(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second) // Update metrics every 5 seconds
+	ticker := time.NewTicker(metricsUpdateInterval) // Update metrics every 5 seconds
 	defer ticker.Stop()
 
 	for {
@@ -271,7 +279,7 @@ func (p *WorkerPool) startMetricsUpdater(ctx context.Context) {
 	}
 }
 
-// updateMetrics updates worker-related metrics
+// updateMetrics updates worker-related metrics.
 func (p *WorkerPool) updateMetrics() {
 	// Calculate messages per second
 	now := time.Now()
@@ -286,12 +294,12 @@ func (p *WorkerPool) updateMetrics() {
 	p.lastProcessedTime = now
 }
 
-// RecordProcessedMessage increments the processed message count
+// RecordProcessedMessage increments the processed message count.
 func (p *WorkerPool) RecordProcessedMessage() {
 	p.processedCount++
 }
 
-// Stop gracefully stops all workers
+// Stop gracefully stops all workers.
 func (p *WorkerPool) Stop() {
 	// Signal shutdown to all workers
 	close(p.shutdown)
@@ -301,13 +309,13 @@ func (p *WorkerPool) Stop() {
 		select {
 		case <-worker.done:
 			// Worker finished
-		case <-time.After(5 * time.Second):
+		case <-time.After(workerShutdownTimeout):
 			// Worker timeout
 		}
 	}
 }
 
-// Shutdown gracefully shuts down the entire worker pool
+// Shutdown gracefully shuts down the entire worker pool.
 func (p *WorkerPool) Shutdown(ctx context.Context) error {
 
 	// First close the queue to stop new events
@@ -321,7 +329,7 @@ func (p *WorkerPool) Shutdown(ctx context.Context) error {
 	close(p.shutdown)
 
 	// Wait for all workers to finish or context to timeout
-	shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(ctx, poolShutdownTimeout)
 	defer cancel()
 
 	for i, worker := range p.workers {

@@ -20,6 +20,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
+// HTTP server timeout constants.
+const (
+	readTimeout               = 10 * time.Second
+	writeTimeout              = 10 * time.Second
+	idleTimeout               = 60 * time.Second
+	readHeaderTimeout         = 5 * time.Second
+	shutdownTimeout           = 30 * time.Second
+	systemMetricsInterval     = 10 * time.Second
+	serviceMetricsInterval    = 5 * time.Second
+	nanosecondsPerMillisecond = 1e6
+)
+
 func main() {
 	// Disable default Go metrics collection to avoid duplicate metrics
 	// We collect our own custom system metrics instead
@@ -88,10 +100,10 @@ func main() {
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           mux,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	// Start the HTTP server
@@ -107,7 +119,7 @@ func main() {
 	log.Info(ctx, "shutting down server...")
 
 	// Graceful shutdown with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -117,9 +129,9 @@ func main() {
 	log.Info(ctx, "server stopped")
 }
 
-// startSystemMetricsUpdater starts a background goroutine that updates system metrics
+// startSystemMetricsUpdater starts a background goroutine that updates system metrics.
 func startSystemMetricsUpdater(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second) // Update every 10 seconds
+	ticker := time.NewTicker(systemMetricsInterval) // Update every 10 seconds
 	defer ticker.Stop()
 
 	for {
@@ -132,9 +144,9 @@ func startSystemMetricsUpdater(ctx context.Context) {
 	}
 }
 
-// startServiceMetricsUpdater starts a background goroutine that updates service metrics
+// startServiceMetricsUpdater starts a background goroutine that updates service metrics.
 func startServiceMetricsUpdater(ctx context.Context, svc *app.Service) {
-	ticker := time.NewTicker(5 * time.Second) // Update every 5 seconds
+	ticker := time.NewTicker(serviceMetricsInterval) // Update every 5 seconds
 	defer ticker.Stop()
 
 	for {
@@ -147,7 +159,7 @@ func startServiceMetricsUpdater(ctx context.Context, svc *app.Service) {
 	}
 }
 
-// updateSystemMetrics updates system-level metrics
+// updateSystemMetrics updates system-level metrics.
 func updateSystemMetrics() {
 	// Update memory usage
 	var m runtime.MemStats
@@ -160,12 +172,12 @@ func updateSystemMetrics() {
 	// Update GC pause time
 	if m.NumGC > 0 {
 		// Calculate average GC pause time
-		avgPauseMs := float64(m.PauseTotalNs) / float64(m.NumGC) / 1e6
+		avgPauseMs := float64(m.PauseTotalNs) / float64(m.NumGC) / nanosecondsPerMillisecond
 		metrics.RecordSystemGCPauseTime(avgPauseMs)
 	}
 }
 
-// updateServiceMetrics updates service-level metrics
+// updateServiceMetrics updates service-level metrics.
 func updateServiceMetrics(svc *app.Service) {
 	// Get current stats from the service
 	stats := svc.GetStats()

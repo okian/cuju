@@ -22,13 +22,18 @@ type Deduper interface {
 	Size() int64
 }
 
-// node represents a single entry in the linked list
+// Default dedupe configuration constants.
+const (
+	defaultDedupeMaxSize = 50000
+)
+
+// node represents a single entry in the linked list.
 type node struct {
 	id   string
 	next *node
 }
 
-// reset clears the node state for reuse
+// reset clears the node state for reuse.
 func (n *node) reset() {
 	n.id = ""
 	n.next = nil
@@ -36,7 +41,7 @@ func (n *node) reset() {
 
 // inMemoryDeduper implements Deduper using an in-memory linked list with FIFO eviction.
 // For bounded mode (maxSize > 0): uses linked list with FIFO eviction and sync.Pool for nodes
-// For unbounded mode (maxSize <= 0): uses simple map (no eviction, no size limit)
+// For unbounded mode (maxSize <= 0): uses simple map (no eviction, no size limit).
 type inMemoryDeduper struct {
 	mu       sync.RWMutex
 	seen     map[string]*node // id -> node pointer for bounded mode, nil for unbounded
@@ -51,7 +56,7 @@ type inMemoryDeduper struct {
 // NewInMemoryDeduper creates a new in-memory deduper with configuration options.
 func NewInMemoryDeduper(opts ...Option) Deduper {
 	d := &inMemoryDeduper{
-		maxSize: 50000, // default max size
+		maxSize: defaultDedupeMaxSize, // default max size
 	}
 
 	// Apply all options

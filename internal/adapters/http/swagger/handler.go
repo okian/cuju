@@ -6,13 +6,13 @@ import (
 	"net/http"
 )
 
-// Error constants
+// Error constants.
 var (
 	ErrServe = errors.New("swagger serve failed")
 )
 
 // Register attaches Swagger UI and the OpenAPI spec routes to mux.
-// Routes:
+// Routes:.
 //
 //	GET /swagger                  -> ReDoc HTML
 //	GET /swagger/openapi.yaml     -> Embedded OpenAPI spec

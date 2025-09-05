@@ -10,14 +10,21 @@ import (
 	"github.com/okian/cuju/pkg/metrics"
 )
 
-// entryPool reduces allocations by reusing Entry structs for internal operations
+// Score bounds constants.
+const (
+	maxScoreValue                = 1e12
+	minScoreValue                = -1e12
+	defaultMetricsUpdateInterval = 5 * time.Second
+)
+
+// entryPool reduces allocations by reusing Entry structs for internal operations.
 var entryPool = sync.Pool{
 	New: func() interface{} {
 		return &Entry{}
 	},
 }
 
-// createEntry creates an Entry from a node and record, using the pool for efficiency
+// createEntry creates an Entry from a node and record, using the pool for efficiency.
 func createEntry(n *node, rec *record) Entry {
 	entry := entryPool.Get().(*Entry)
 	entry.TalentID = n.id
@@ -41,7 +48,7 @@ func createEntry(n *node, rec *record) Entry {
 // Treap-based, in-memory Store implementation.
 //
 // Ordering: score DESC, then talentID ASC (deterministic).
-// We implement a BST comparator where "less" means ranks earlier
+// We implement a BST comparator where "less" means ranks earlier.
 // (i.e., higher score ranks earlier). This makes in-order traversal
 // produce the leaderboard from best to worst.
 
@@ -63,10 +70,10 @@ func toFixedPoint(x float64) scoreFP {
 	}
 
 	// Clamp to reasonable range to avoid overflow
-	if x > 1e12 {
-		x = 1e12
-	} else if x < -1e12 {
-		x = -1e12
+	if x > maxScoreValue {
+		x = maxScoreValue
+	} else if x < minScoreValue {
+		x = minScoreValue
 	}
 
 	// Convert to fixed point with optimized bounds checking
@@ -95,7 +102,7 @@ type record struct {
 	rawMetric float64
 }
 
-// treap node
+// treap node.
 type node struct {
 	id     string
 	score  scoreFP
@@ -159,7 +166,7 @@ func scoreToPriority(score scoreFP) uint64 {
 	// Use the score as a seed for deterministic random priorities
 	// This ensures the same score always gets the same priority
 	// but different scores get different random priorities
-	return uint64(score*1103515245 + 12345) // Simple linear congruential generator
+	return uint64(score*1103515245 + 12345) // Simple linear congruential generator //nolint:gosec // intentional overflow for hash function
 }
 
 func insert(n *node, id string, score scoreFP, rec *record) *node {
@@ -226,7 +233,6 @@ func collectTopN(n *node, limit int, out *[]Entry) {
 	// Add current node if we haven't reached the limit
 	if len(*out) < limit && n.record != nil {
 		entry := createEntry(n, n.record)
-		entry.Rank = 0 // fix later
 		*out = append(*out, entry)
 	}
 
@@ -247,7 +253,7 @@ type TreapStore struct {
 func NewTreapStore(ctx context.Context, opts ...Option) *TreapStore {
 	s := &TreapStore{
 		byID:                  make(map[string]*record),
-		metricsUpdateInterval: 5 * time.Second, // default 5 seconds
+		metricsUpdateInterval: defaultMetricsUpdateInterval, // default 5 seconds
 	}
 
 	// Apply all options (shard-related options are ignored)
@@ -365,7 +371,7 @@ func (s *TreapStore) Count(ctx context.Context) int {
 	return len(s.byID)
 }
 
-// startMetricsUpdater starts a background goroutine that updates repository metrics
+// startMetricsUpdater starts a background goroutine that updates repository metrics.
 func (s *TreapStore) startMetricsUpdater(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(s.metricsUpdateInterval)
@@ -382,7 +388,7 @@ func (s *TreapStore) startMetricsUpdater(ctx context.Context) {
 	}()
 }
 
-// updateMetrics updates all repository-related metrics
+// updateMetrics updates all repository-related metrics.
 func (s *TreapStore) updateMetrics() {
 	s.mu.RLock()
 	recordCount := len(s.byID)
@@ -404,8 +410,8 @@ func (s *TreapStore) updateMetrics() {
 	metrics.UpdateRepositoryRecordsTotal(recordCount)
 }
 
-// calculateRank efficiently calculates the rank of a talent
-// Uses in-order traversal with early termination for better performance than O(n)
+// calculateRank efficiently calculates the rank of a talent.
+// Uses in-order traversal with early termination for better performance than O(n).
 func (s *TreapStore) calculateRank(n *node, targetScore scoreFP, targetID string) int {
 	if n == nil {
 		return 0
@@ -417,7 +423,7 @@ func (s *TreapStore) calculateRank(n *node, targetScore scoreFP, targetID string
 	return count + 1 // 1-based ranking
 }
 
-// countHigherScores counts nodes with higher scores using in-order traversal
+// countHigherScores counts nodes with higher scores using in-order traversal.
 func (s *TreapStore) countHigherScores(n *node, targetScore scoreFP, targetID string, count *int) {
 	if n == nil {
 		return
@@ -455,7 +461,7 @@ func collectAll(n *node, out *[]Entry) {
 	collectAll(n.right, out)
 }
 
-// sortEntries sorts entries by score (descending) and talentID (ascending) to match TopN logic
+// sortEntries sorts entries by score (descending) and talentID (ascending) to match TopN logic.
 func sortEntries(entries []Entry) {
 	// Simple bubble sort for small datasets
 	for i := 0; i < len(entries)-1; i++ {
@@ -474,7 +480,7 @@ func sortEntries(entries []Entry) {
 }
 
 // assignRanksWithTies assigns ranks with proper tie handling.
-// Talents with the same score get the same rank, and the next rank
+// Talents with the same score get the same rank, and the next rank.
 // skips the appropriate number of positions.
 func assignRanksWithTies(entries []Entry) {
 	if len(entries) == 0 {

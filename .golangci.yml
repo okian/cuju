@@ -22,7 +22,7 @@ linters:
     
     # Go vet and related
     - govet
-    - shadow
+    - predeclared
     
     # Error handling
     - errcheck
@@ -31,15 +31,13 @@ linters:
     
     # Static analysis
     - staticcheck
-    - gosimple
     - unused
     - ineffassign
-    - deadcode
     
     # Code complexity and maintainability
     - gocyclo
     - goconst
-    - gomnd
+    - mnd
     - dupl
     - funlen
     - nestif
@@ -63,14 +61,11 @@ linters:
     - unconvert
     - unparam
     - whitespace
-    - exportloopref
+    - copyloopvar
     - gochecknoinits
     - gochecknoglobals
     - goprintffuncname
     - nolintlint
-    - structcheck
-    - stylecheck
-    - varcheck
     
     # Documentation
     - godot
@@ -98,7 +93,7 @@ linters-settings:
     min-len: 3
     min-occurrences: 3
   
-  gomnd:
+  mnd:
     settings:
       mnd:
         checks: argument,case,condition,operation,return,assign
@@ -208,7 +203,7 @@ issues:
     # Test files - more lenient rules
     - path: _test\.go
       linters:
-        - gomnd
+        - mnd
         - goconst
         - dupl
         - gocyclo

@@ -11,7 +11,12 @@ import (
 	"strings"
 )
 
-// Logger defines the logging interface
+// Constants for logging operations.
+const (
+	callerSkipFrames = 2 // Skip frames: getCaller -> logging method -> actual caller
+)
+
+// Logger defines the logging interface.
 type Logger interface {
 	// Context-aware variants
 	Info(ctx context.Context, msg string, fields ...Field)
@@ -23,20 +28,20 @@ type Logger interface {
 	Named(name string) Logger
 }
 
-// Field represents a key-value pair for structured logging
+// Field represents a key-value pair for structured logging.
 type Field struct {
 	Key   string
 	Value interface{}
 }
 
-// Field constructors
+// Field constructors.
 func String(key, val string) Field          { return Field{Key: key, Value: val} }
 func Int(key string, val int) Field         { return Field{Key: key, Value: val} }
 func Float64(key string, val float64) Field { return Field{Key: key, Value: val} }
 func Any(key string, val interface{}) Field { return Field{Key: key, Value: val} }
 func Error(err error) Field                 { return Field{Key: "error", Value: err} }
 
-// slogLogger implements Logger using slog
+// slogLogger implements Logger using slog.
 type slogLogger struct {
 	Logger *slog.Logger
 }
@@ -76,7 +81,7 @@ func (l *slogLogger) Fatal(ctx context.Context, msg string, fields ...Field) {
 	os.Exit(1)
 }
 
-// convertFields converts our Field type to slog.Attr
+// convertFields converts our Field type to slog.Attr.
 func convertFields(fields []Field) []slog.Attr {
 	attrs := make([]slog.Attr, len(fields))
 	for i, f := range fields {
@@ -88,7 +93,7 @@ func convertFields(fields []Field) []slog.Attr {
 var global Logger
 var levelVar slog.LevelVar
 
-// Init initializes the global logger
+// Init initializes the global logger.
 func Init() error {
 	// Default to info; can be changed with SetLevel*/SetLevelString.
 	levelVar.Set(slog.LevelInfo)
@@ -98,10 +103,10 @@ func Init() error {
 	return nil
 }
 
-// getCaller returns the caller location in format relative/path/file.go:line (IDE-friendly)
+// getCaller returns the caller location in format relative/path/file.go:line (IDE-friendly).
 func getCaller() string {
 	// Skip 2 frames: getCaller -> logging method -> actual caller
-	_, file, line, ok := runtime.Caller(2)
+	_, file, line, ok := runtime.Caller(callerSkipFrames)
 	if !ok {
 		return "unknown:0"
 	}
@@ -125,7 +130,7 @@ func getCaller() string {
 	return fmt.Sprintf("%s:%d", relPath, line)
 }
 
-// Get returns the global logger
+// Get returns the global logger.
 func Get() Logger {
 	if global == nil {
 		// Don't auto-initialize with production settings
@@ -135,12 +140,12 @@ func Get() Logger {
 	return global
 }
 
-// Named creates a named logger
+// Named creates a named logger.
 func Named(name string) Logger {
 	return Get().Named(name)
 }
 
-// Sync flushes buffered log entries
+// Sync flushes buffered log entries.
 func Sync() error {
 	// slog does not buffer; nothing to flush
 	return nil

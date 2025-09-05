@@ -1,4 +1,4 @@
-// Package service provides the core business service that implements
+// Package service provides the core business service that implements.
 // the dependencies required by the HTTP API.
 package service
 
@@ -21,7 +21,17 @@ import (
 	"github.com/okian/cuju/pkg/metrics"
 )
 
-// scoringAdapter adapts the scoring.Scorer interface to worker.Scorer
+// Default service configuration constants.
+const (
+	defaultWorkerMultiplier  = 2 // multiplier for runtime.NumCPU()
+	defaultQueueSize         = 100000
+	defaultDedupeSize        = 50000
+	defaultSkillWeight       = 0.5
+	defaultScoringMinLatency = 80 * time.Millisecond
+	defaultScoringMaxLatency = 150 * time.Millisecond
+)
+
+// scoringAdapter adapts the scoring.Scorer interface to worker.Scorer.
 type scoringAdapter struct {
 	scorer scoring.Scorer
 }
@@ -136,17 +146,17 @@ func WithScoringLatencyRange(min, max time.Duration) Option {
 // New constructs a new Service with default configuration.
 func New(opts ...Option) *Service {
 	s := &Service{
-		workerCount: runtime.NumCPU() * 2, // Default to 2x CPU cores
-		queueSize:   100000,               // Default queue size
-		dedupeSize:  50000,                // Default dedupe cache size
+		workerCount: runtime.NumCPU() * defaultWorkerMultiplier, // Default to 2x CPU cores
+		queueSize:   defaultQueueSize,                           // Default queue size
+		dedupeSize:  defaultDedupeSize,                          // Default dedupe cache size
 		skillWeights: map[string]float64{
 			"coding": 1.0,
 		},
-		defaultWeight:     0.5,
+		defaultWeight:     defaultSkillWeight,
 		stopCh:            make(chan struct{}),
 		logger:            nil, // Will be replaced when service starts
-		scoringMinLatency: 80 * time.Millisecond,
-		scoringMaxLatency: 150 * time.Millisecond,
+		scoringMinLatency: defaultScoringMinLatency,
+		scoringMaxLatency: defaultScoringMaxLatency,
 	}
 
 	// Apply all options

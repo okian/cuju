@@ -1,6 +1,6 @@
 // Package config defines service configuration structures and loading hooks.
 //
-// Conventions:
+// Conventions:.
 // - Keep fields unexported where possible and use functional options.
 // - Provide New(...Option) initializer to build a Config with defaults.
 // - All future functions must accept context.Context as the first parameter.
@@ -9,6 +9,17 @@ package config
 
 import (
 	"runtime"
+)
+
+// Default configuration constants.
+const (
+	defaultEventQueueSize      = 200_000
+	defaultWorkerMultiplier    = 20 // multiplier for runtime.NumCPU()
+	defaultDedupeSize          = 500_000
+	defaultScoringLatencyMinMS = 80
+	defaultScoringLatencyMaxMS = 150
+	defaultDribbleSkillWeight  = 3.0
+	defaultSkillWeight         = 1.5
 )
 
 // Config contains process configuration. Extend as needed.
@@ -46,15 +57,15 @@ func New() *Config {
 	c := &Config{
 		LogLevel:            "info",
 		Addr:                ":9080",
-		EventQueueSize:      200_000,
-		WorkerCount:         runtime.NumCPU() * 20,
-		DedupeSize:          500_000,
-		ScoringLatencyMinMS: 80,
-		ScoringLatencyMaxMS: 150,
+		EventQueueSize:      defaultEventQueueSize,
+		WorkerCount:         runtime.NumCPU() * defaultWorkerMultiplier,
+		DedupeSize:          defaultDedupeSize,
+		ScoringLatencyMinMS: defaultScoringLatencyMinMS,
+		ScoringLatencyMaxMS: defaultScoringLatencyMaxMS,
 		SkillWeights: map[string]float64{
-			"dribble": 3.0,
+			"dribble": defaultDribbleSkillWeight,
 		},
-		DefaultSkillWeight: 1.5,
+		DefaultSkillWeight: defaultSkillWeight,
 	}
 	return c
 }

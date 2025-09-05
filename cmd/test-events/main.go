@@ -10,13 +10,22 @@ import (
 	"github.com/okian/cuju/internal/testevents"
 )
 
+// Default configuration constants.
+const (
+	defaultNumEvents   = 10000
+	defaultTopN        = 50
+	defaultWorkers     = 2 // multiplier for runtime.NumCPU()
+	defaultTimeout     = 30 * time.Second
+	defaultTestTimeout = 10 * time.Minute
+)
+
 func main() {
 	var (
 		baseURL    = flag.String("url", "http://localhost:9080", "Base URL of the service")
-		numEvents  = flag.Int("events", 10000, "Number of events to generate and submit")
-		topN       = flag.Int("top", 50, "Number of top entries to fetch from leaderboard")
-		workers    = flag.Int("workers", runtime.NumCPU()*2, "Number of concurrent workers")
-		timeout    = flag.Duration("timeout", 30*time.Second, "HTTP request timeout")
+		numEvents  = flag.Int("events", defaultNumEvents, "Number of events to generate and submit")
+		topN       = flag.Int("top", defaultTopN, "Number of top entries to fetch from leaderboard")
+		workers    = flag.Int("workers", runtime.NumCPU()*defaultWorkers, "Number of concurrent workers")
+		timeout    = flag.Duration("timeout", defaultTimeout, "HTTP request timeout")
 		outputFile = flag.String("output", "", "Output file for generated events (default: generated_events_TIMESTAMP.json)")
 		logFile    = flag.String("log", "", "Log file for test output (default: test_log_TIMESTAMP.log)")
 		verbose    = flag.Bool("verbose", false, "Enable verbose logging")
@@ -35,7 +44,7 @@ func main() {
 	}
 
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Create test configuration

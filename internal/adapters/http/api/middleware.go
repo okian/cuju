@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,7 +10,15 @@ import (
 	"github.com/okian/cuju/pkg/metrics"
 )
 
-// MetricsMiddleware wraps HTTP handlers to record Prometheus metrics
+// HTTP status code constants.
+const (
+	statusBadRequest      = 400
+	statusNotFound        = 404
+	statusTooManyRequests = 429
+	statusInternalError   = 500
+)
+
+// MetricsMiddleware wraps HTTP handlers to record Prometheus metrics.
 func MetricsMiddleware(next http.HandlerFunc, endpoint string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -29,7 +38,7 @@ func MetricsMiddleware(next http.HandlerFunc, endpoint string) http.HandlerFunc 
 		metrics.RecordHTTPRequestDuration(endpoint, r.Method, statusCodeStr, durationMs)
 
 		// Record error metrics if status indicates an error
-		if wrapped.statusCode >= 400 {
+		if wrapped.statusCode >= statusBadRequest {
 			errorType := getErrorType(wrapped.statusCode)
 			severity := getErrorSeverity(wrapped.statusCode)
 			metrics.RecordErrorByEndpoint(endpoint, r.Method, errorType)
@@ -39,35 +48,35 @@ func MetricsMiddleware(next http.HandlerFunc, endpoint string) http.HandlerFunc 
 	}
 }
 
-// getErrorType returns a standardized error type based on HTTP status code
+// getErrorType returns a standardized error type based on HTTP status code.
 func getErrorType(statusCode int) string {
 	switch {
-	case statusCode >= 500:
+	case statusCode >= statusInternalError:
 		return "server_error"
-	case statusCode == 429:
+	case statusCode == statusTooManyRequests:
 		return "rate_limit"
-	case statusCode == 404:
+	case statusCode == statusNotFound:
 		return "not_found"
-	case statusCode >= 400:
+	case statusCode >= statusBadRequest:
 		return "client_error"
 	default:
 		return "unknown"
 	}
 }
 
-// getErrorSeverity returns error severity based on HTTP status code
+// getErrorSeverity returns error severity based on HTTP status code.
 func getErrorSeverity(statusCode int) string {
 	switch {
-	case statusCode >= 500:
+	case statusCode >= statusInternalError:
 		return "high"
-	case statusCode >= 400:
+	case statusCode >= statusBadRequest:
 		return "medium"
 	default:
 		return "low"
 	}
 }
 
-// responseWriter wraps http.ResponseWriter to capture status code
+// responseWriter wraps http.ResponseWriter to capture status code.
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -79,5 +88,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 func (rw *responseWriter) Write(b []byte) (int, error) {
-	return rw.ResponseWriter.Write(b)
+	n, err := rw.ResponseWriter.Write(b)
+	if err != nil {
+		return n, fmt.Errorf("failed to write response: %w", err)
+	}
+	return n, nil
 }

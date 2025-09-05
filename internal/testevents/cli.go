@@ -16,7 +16,7 @@ func SetupLogging(logFile string) error {
 		logFile = fmt.Sprintf("test_log_%s.log", timestamp)
 	}
 
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600) //nolint:gosec // log file permissions
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
@@ -30,7 +30,7 @@ func SetupLogging(logFile string) error {
 
 // ShowHelp prints usage information for the test events tool.
 func ShowHelp() {
-	fmt.Print(`Cuju Event Test Tool
+	log.Print(`Cuju Event Test Tool
 ===================
 
 A high-performance concurrent tool for testing the Cuju event processing system.

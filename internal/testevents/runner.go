@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Run executes the complete event test
+// Run executes the complete event test.
 func Run(ctx context.Context, config *Config) error {
 	stats := &Stats{
 		StartTime: time.Now(),
@@ -45,7 +45,7 @@ func Run(ctx context.Context, config *Config) error {
 
 	// Step 4: Wait for processing
 	log.Println("⏳ Waiting for events to be processed...")
-	time.Sleep(5 * time.Second)
+	time.Sleep(HealthCheckDelay)
 
 	// Step 5: Retrieve rankings concurrently
 	rankings, err := retrieveRankings(ctx, config, events, stats)
@@ -79,7 +79,7 @@ func Run(ctx context.Context, config *Config) error {
 	return nil
 }
 
-// checkServiceHealth verifies the service is running
+// checkServiceHealth verifies the service is running.
 func checkServiceHealth(ctx context.Context, config *Config) error {
 	log.Println("🔍 Checking service health...")
 
@@ -97,7 +97,7 @@ func checkServiceHealth(ctx context.Context, config *Config) error {
 	}()
 
 	// Accept any 200 response as healthy (the service returns Prometheus metrics)
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != StatusOK {
 		return fmt.Errorf("service health check failed with status: %d", resp.StatusCode)
 	}
 
@@ -105,7 +105,7 @@ func checkServiceHealth(ctx context.Context, config *Config) error {
 	return nil
 }
 
-// saveEventsToFile saves the generated events to a JSON file
+// saveEventsToFile saves the generated events to a JSON file.
 func saveEventsToFile(ctx context.Context, config *Config, events []Event) error {
 	if len(events) == 0 {
 		return fmt.Errorf("no events to save")
@@ -121,13 +121,13 @@ func saveEventsToFile(ctx context.Context, config *Config, events []Event) error
 	// Ensure the directory exists
 	dir := filepath.Dir(filename)
 	if dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil { //nolint:gosec // directory permissions
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
 
 	// Write events to file
-	file, err := os.Create(filename)
+	file, err := os.Create(filename) //nolint:gosec // file creation for test output
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
@@ -169,13 +169,13 @@ func saveEventsToFile(ctx context.Context, config *Config, events []Event) error
 	return nil
 }
 
-// printFinalStats prints the final test statistics
+// printFinalStats prints the final test statistics.
 func printFinalStats(stats *Stats) {
 	var successRate, eventsPerSecond float64
 	var successRateStr, eventsPerSecondStr string
 
 	if stats.EventsSubmitted > 0 {
-		successRate = float64(stats.EventsSuccessful) / float64(stats.EventsSubmitted) * 100
+		successRate = float64(stats.EventsSuccessful) / float64(stats.EventsSubmitted) * PercentageMultiplier
 		successRateStr = fmt.Sprintf("   Success Rate: %.2f%%\n", successRate)
 	}
 

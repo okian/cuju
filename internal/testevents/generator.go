@@ -2,15 +2,22 @@ package testevents
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// generateEvents creates the specified number of events with unique talent IDs
+// getRandomFloat returns a random float64 between 0.0 and 1.0 using crypto/rand.
+func getRandomFloat() float64 {
+	n, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	return float64(n.Int64()) / 1000000.0
+}
+
+// generateEvents creates the specified number of events with unique talent IDs.
 func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event, error) {
 	log.Printf("🎲 Generating %d events with unique talent IDs...", config.NumEvents)
 
@@ -76,7 +83,7 @@ func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event,
 	return events, nil
 }
 
-// generateSingleEvent creates a single event with the given index and talent ID
+// generateSingleEvent creates a single event with the given index and talent ID.
 func generateSingleEvent(index int, talentID string) (Event, error) {
 	// Generate varied metric distribution (similar to shell script)
 	rawMetric := generateVariedMetric()
@@ -88,7 +95,8 @@ func generateSingleEvent(index int, talentID string) (Event, error) {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
 	// Generate unique event ID
-	eventID := fmt.Sprintf("event_%04d_%d_%d", index, time.Now().Unix(), rand.Intn(10000))
+	randNum, _ := rand.Int(rand.Reader, big.NewInt(10000))
+	eventID := fmt.Sprintf("event_%04d_%d_%d", index, time.Now().Unix(), randNum.Int64())
 
 	return Event{
 		EventID:   eventID,
@@ -99,40 +107,41 @@ func generateSingleEvent(index int, talentID string) (Event, error) {
 	}, nil
 }
 
-// generateVariedMetric creates a metric with varied distribution
+// generateVariedMetric creates a metric with varied distribution.
 func generateVariedMetric() float64 {
 	// Use the same distribution logic as the shell script
-	switch rand.Intn(8) {
+	randNum, _ := rand.Int(rand.Reader, big.NewInt(8))
+	switch randNum.Int64() {
 	case 0:
 		// Average performers (3.0 - 7.0) - most common
-		return 3.0 + rand.Float64()*4.0
+		return 3.0 + getRandomFloat()*4.0
 	case 1:
 		// High performers (7.0 - 9.0)
-		return 7.0 + rand.Float64()*2.0
+		return 7.0 + getRandomFloat()*2.0
 	case 2:
 		// Low performers (0.1 - 3.0)
-		return 0.1 + rand.Float64()*2.9
+		return 0.1 + getRandomFloat()*2.9
 	case 3:
 		// Elite performers (9.0 - 10.0) - rare
-		return 9.0 + rand.Float64()*1.0
+		return 9.0 + getRandomFloat()*1.0
 	case 4:
 		// Very low performers (0.1 - 1.0) - rare
-		return 0.1 + rand.Float64()*0.9
+		return 0.1 + getRandomFloat()*0.9
 	case 5:
 		// Mid-high performers (6.0 - 8.0)
-		return 6.0 + rand.Float64()*2.0
+		return 6.0 + getRandomFloat()*2.0
 	case 6:
 		// Mid-low performers (2.0 - 4.0)
-		return 2.0 + rand.Float64()*2.0
+		return 2.0 + getRandomFloat()*2.0
 	case 7:
 		// Random across full range (0.1 - 10.0)
-		return 0.1 + rand.Float64()*9.9
+		return 0.1 + getRandomFloat()*9.9
 	default:
-		return 0.1 + rand.Float64()*9.9
+		return 0.1 + getRandomFloat()*9.9
 	}
 }
 
-// min returns the minimum of two integers
+// min returns the minimum of two integers.
 func min(a, b int) int {
 	if a < b {
 		return a

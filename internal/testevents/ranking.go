@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// retrieveRankings retrieves rankings for all talents concurrently
+// retrieveRankings retrieves rankings for all talents concurrently.
 func retrieveRankings(ctx context.Context, config *Config, events []Event, stats *Stats) ([]Entry, error) {
 	log.Printf("🏆 Retrieving rankings for %d talents with %d workers...", len(events), config.Workers)
 
@@ -33,7 +33,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 	reportInterval := 1 * time.Second
 
 	// Create worker pool
-	talentChan := make(chan int, config.Workers*2) // Send indices instead of IDs
+	talentChan := make(chan int, config.Workers*WorkerChannelMultiplier) // Send indices instead of IDs
 	var wg sync.WaitGroup
 
 	// Start workers
@@ -71,7 +71,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 							log.Printf("📊 Ranking progress: %d/%d retrieved (success: %d, failed: %d)",
 								total, len(talentIDs), ret, fail)
 						} else {
-							fmt.Printf("\r🏆 Rankings: %d/%d retrieved (success: %d, failed: %d)",
+							log.Printf("\r🏆 Rankings: %d/%d retrieved (success: %d, failed: %d)",
 								total, len(talentIDs), ret, fail)
 						}
 					}
@@ -97,7 +97,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 
 	// Final progress report
 	if !config.Verbose {
-		fmt.Println() // New line after progress indicator
+		log.Println() // New line after progress indicator
 	}
 
 	// Filter out empty entries (failed retrievals)
@@ -119,7 +119,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 	return validRankings, nil
 }
 
-// retrieveSingleRanking retrieves ranking for a single talent
+// retrieveSingleRanking retrieves ranking for a single talent.
 func retrieveSingleRanking(ctx context.Context, client *HTTPClient, baseURL, talentID string) (Entry, error) {
 	url := fmt.Sprintf("%s/rank/%s", baseURL, talentID)
 
@@ -133,7 +133,7 @@ func retrieveSingleRanking(ctx context.Context, client *HTTPClient, baseURL, tal
 		}
 	}()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != StatusOK {
 		body, _ := readResponseBody(resp)
 		return Entry{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
@@ -151,7 +151,7 @@ func retrieveSingleRanking(ctx context.Context, client *HTTPClient, baseURL, tal
 	return entry, nil
 }
 
-// getLeaderboard retrieves the top N leaderboard entries
+// getLeaderboard retrieves the top N leaderboard entries.
 func getLeaderboard(ctx context.Context, config *Config, stats *Stats) ([]Entry, error) {
 	log.Printf("🥇 Getting top %d leaderboard entries...", config.TopN)
 
@@ -168,7 +168,7 @@ func getLeaderboard(ctx context.Context, config *Config, stats *Stats) ([]Entry,
 		}
 	}()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != StatusOK {
 		body, _ := readResponseBody(resp)
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}

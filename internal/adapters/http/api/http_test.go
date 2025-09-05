@@ -16,7 +16,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-// Mock implementations for testing
+// Mock implementations for testing.
 type mockDeduper struct {
 	seen map[string]bool
 }
@@ -578,7 +578,7 @@ func TestStatsHandler_HandleStats(t *testing.T) {
 	})
 }
 
-// Mock dependencies that implements the Dependencies interface
+// Mock dependencies that implements the Dependencies interface.
 type mockDependencies struct {
 	dedupe *mockDeduper
 	queue  *mockQueue
@@ -609,7 +609,7 @@ func (m *mockDependencies) Rank(ctx context.Context, talentID string) (types.Ent
 	return m.lb.Rank(ctx, talentID)
 }
 
-// Local types for testing
+// Local types for testing.
 type eventRequest struct {
 	EventID   string  `json:"event_id"`
 	TalentID  string  `json:"talent_id"`

@@ -34,12 +34,12 @@ func TestConfigLoader(t *testing.T) {
 
 		Convey("When loading config with environment variables", func() {
 			// Set environment variables
-			os.Setenv("CUJU_ADDR", ":8080")
-			os.Setenv("CUJU_QUEUE_SIZE", "100000")
-			os.Setenv("CUJU_WORKER_COUNT", "16")
-			os.Setenv("CUJU_DEDUPE_SIZE", "250000")
-			os.Setenv("CUJU_SCORING_LATENCY_MIN_MS", "50")
-			os.Setenv("CUJU_SCORING_LATENCY_MAX_MS", "100")
+			_ = os.Setenv("CUJU_ADDR", ":8080")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "100000")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "16")
+			_ = os.Setenv("CUJU_DEDUPE_SIZE", "250000")
+			_ = os.Setenv("CUJU_SCORING_LATENCY_MIN_MS", "50")
+			_ = os.Setenv("CUJU_SCORING_LATENCY_MAX_MS", "100")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -67,10 +67,10 @@ scoring_latency_min_ms: 60
 scoring_latency_max_ms: 120
 `
 			tmpFile := createTempConfigFile(yamlContent)
-			defer os.Remove(tmpFile)
+			defer func() { _ = os.Remove(tmpFile) }()
 
 			// Set the config file path
-			os.Setenv("CUJU_CONFIG", tmpFile)
+			_ = os.Setenv("CUJU_CONFIG", tmpFile)
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -98,12 +98,12 @@ scoring_latency_min_ms: 60
 scoring_latency_max_ms: 120
 `
 			tmpFile := createTempConfigFile(yamlContent)
-			defer os.Remove(tmpFile)
+			defer func() { _ = os.Remove(tmpFile) }()
 
 			// Set both file and environment variables
-			os.Setenv("CUJU_CONFIG", tmpFile)
-			os.Setenv("CUJU_ADDR", ":8080")      // This should override the file
-			os.Setenv("CUJU_WORKER_COUNT", "32") // This should override the file
+			_ = os.Setenv("CUJU_CONFIG", tmpFile)
+			_ = os.Setenv("CUJU_ADDR", ":8080")      // This should override the file
+			_ = os.Setenv("CUJU_WORKER_COUNT", "32") // This should override the file
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -124,9 +124,9 @@ scoring_latency_max_ms: 120
 			// Create an invalid YAML file
 			invalidYaml := `invalid: yaml: content: [`
 			tmpFile := createTempConfigFile(invalidYaml)
-			defer os.Remove(tmpFile)
+			defer func() { _ = os.Remove(tmpFile) }()
 
-			os.Setenv("CUJU_CONFIG", tmpFile)
+			_ = os.Setenv("CUJU_CONFIG", tmpFile)
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -138,7 +138,7 @@ scoring_latency_max_ms: 120
 		})
 
 		Convey("When loading config with non-existent file", func() {
-			os.Setenv("CUJU_CONFIG", "/non/existent/file.yaml")
+			_ = os.Setenv("CUJU_CONFIG", "/non/existent/file.yaml")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -150,7 +150,7 @@ scoring_latency_max_ms: 120
 		})
 
 		Convey("When loading config with empty addr", func() {
-			os.Setenv("CUJU_ADDR", "")
+			_ = os.Setenv("CUJU_ADDR", "")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -169,9 +169,9 @@ addr: ":9090"
 worker_count: 16
 `
 			tmpFile := createTempConfigFile(yamlContent)
-			defer os.Remove(tmpFile)
+			defer func() { _ = os.Remove(tmpFile) }()
 
-			os.Setenv("CUJU_CONFIG", tmpFile)
+			_ = os.Setenv("CUJU_CONFIG", tmpFile)
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -190,9 +190,9 @@ worker_count: 16
 
 		Convey("When loading config with environment variables using different cases", func() {
 			// Test case insensitivity
-			os.Setenv("CUJU_ADDR", ":8080")
-			os.Setenv("CUJU_QUEUE_SIZE", "100000") // uppercase prefix
-			os.Setenv("CUJU_WORKER_COUNT", "16")
+			_ = os.Setenv("CUJU_ADDR", ":8080")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "100000") // uppercase prefix
+			_ = os.Setenv("CUJU_WORKER_COUNT", "16")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -207,11 +207,11 @@ worker_count: 16
 		})
 
 		Convey("When loading config with numeric environment variables", func() {
-			os.Setenv("CUJU_QUEUE_SIZE", "500000")
-			os.Setenv("CUJU_WORKER_COUNT", "32")
-			os.Setenv("CUJU_DEDUPE_SIZE", "750000")
-			os.Setenv("CUJU_SCORING_LATENCY_MIN_MS", "40")
-			os.Setenv("CUJU_SCORING_LATENCY_MAX_MS", "200")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "500000")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "32")
+			_ = os.Setenv("CUJU_DEDUPE_SIZE", "750000")
+			_ = os.Setenv("CUJU_SCORING_LATENCY_MIN_MS", "40")
+			_ = os.Setenv("CUJU_SCORING_LATENCY_MAX_MS", "200")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -228,8 +228,8 @@ worker_count: 16
 		})
 
 		Convey("When loading config with invalid numeric environment variables", func() {
-			os.Setenv("CUJU_QUEUE_SIZE", "invalid")
-			os.Setenv("CUJU_WORKER_COUNT", "not_a_number")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "invalid")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "not_a_number")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -247,9 +247,9 @@ func TestConfigLoaderEdgeCases(t *testing.T) {
 		ctx := context.Background()
 
 		Convey("When loading config with very large values", func() {
-			os.Setenv("CUJU_QUEUE_SIZE", "1000000")
-			os.Setenv("CUJU_WORKER_COUNT", "1000")
-			os.Setenv("CUJU_DEDUPE_SIZE", "2000000")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "1000000")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "1000")
+			_ = os.Setenv("CUJU_DEDUPE_SIZE", "2000000")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -264,9 +264,9 @@ func TestConfigLoaderEdgeCases(t *testing.T) {
 		})
 
 		Convey("When loading config with zero values", func() {
-			os.Setenv("CUJU_QUEUE_SIZE", "0")
-			os.Setenv("CUJU_WORKER_COUNT", "0")
-			os.Setenv("CUJU_DEDUPE_SIZE", "0")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "0")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "0")
+			_ = os.Setenv("CUJU_DEDUPE_SIZE", "0")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -281,9 +281,9 @@ func TestConfigLoaderEdgeCases(t *testing.T) {
 		})
 
 		Convey("When loading config with negative values", func() {
-			os.Setenv("CUJU_QUEUE_SIZE", "-100")
-			os.Setenv("CUJU_WORKER_COUNT", "-10")
-			os.Setenv("CUJU_DEDUPE_SIZE", "-200")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "-100")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "-10")
+			_ = os.Setenv("CUJU_DEDUPE_SIZE", "-200")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -298,9 +298,9 @@ func TestConfigLoaderEdgeCases(t *testing.T) {
 		})
 
 		Convey("When loading config with special characters in addr", func() {
-			os.Setenv("CUJU_ADDR", "localhost:8080")
-			os.Setenv("CUJU_ADDR", "0.0.0.0:9090")
-			os.Setenv("CUJU_ADDR", "[::1]:8080")
+			_ = os.Setenv("CUJU_ADDR", "localhost:8080")
+			_ = os.Setenv("CUJU_ADDR", "0.0.0.0:9090")
+			_ = os.Setenv("CUJU_ADDR", "[::1]:8080")
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -322,9 +322,9 @@ worker_count: 24
 dedupe_size: 600000
 `
 			tmpFile := createTempConfigFile(yamlContent)
-			defer os.Remove(tmpFile)
+			defer func() { _ = os.Remove(tmpFile) }()
 
-			os.Setenv("CUJU_CONFIG", tmpFile)
+			_ = os.Setenv("CUJU_CONFIG", tmpFile)
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -347,9 +347,9 @@ worker_count: 24
 dedupe_size: 600000
 `
 			tmpFile := createTempConfigFile(yamlContent)
-			defer os.Remove(tmpFile)
+			defer func() { _ = os.Remove(tmpFile) }()
 
-			os.Setenv("CUJU_CONFIG", tmpFile)
+			_ = os.Setenv("CUJU_CONFIG", tmpFile)
 			defer clearConfigEnvVars()
 
 			cfg, err := config.Load(ctx)
@@ -363,7 +363,7 @@ dedupe_size: 600000
 	})
 }
 
-// Helper functions
+// Helper functions.
 
 func clearConfigEnvVars() {
 	envVars := []string{
@@ -376,7 +376,7 @@ func clearConfigEnvVars() {
 		"CUJU_SCORING_LATENCY_MAX_MS",
 	}
 	for _, envVar := range envVars {
-		os.Unsetenv(envVar)
+		_ = os.Unsetenv(envVar)
 	}
 }
 

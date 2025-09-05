@@ -13,7 +13,7 @@ import (
 )
 
 // Load builds a Config by layering defaults, optional file, and env vars.
-// Order of precedence (low -> high):
+// Order of precedence (low -> high):.
 //  1. defaults (New(ctx))
 //  2. file (YAML) if CUJU_CONFIG is set
 //  3. env (prefix CUJU_)

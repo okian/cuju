@@ -7,22 +7,22 @@ import (
 	"strings"
 )
 
-// RankDependencies defines the interface for rank operations
+// RankDependencies defines the interface for rank operations.
 type RankDependencies interface {
 	Rank(ctx context.Context, talentID string) (Entry, error)
 }
 
-// RankHandler handles rank requests
+// RankHandler handles rank requests.
 type RankHandler struct {
 	deps RankDependencies
 }
 
-// NewRankHandler creates a new rank handler
+// NewRankHandler creates a new rank handler.
 func NewRankHandler(deps RankDependencies) *RankHandler {
 	return &RankHandler{deps: deps}
 }
 
-// HandleGetRank handles GET /rank/{talent_id} requests
+// HandleGetRank handles GET /rank/{talent_id} requests.
 func (h *RankHandler) HandleGetRank(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)

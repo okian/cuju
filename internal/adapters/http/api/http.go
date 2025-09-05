@@ -39,7 +39,7 @@ type Server struct {
 	dashboardHandler   *dashboardHandler
 }
 
-// NewServer creates a new API server with all handlers
+// NewServer creates a new API server with all handlers.
 func NewServer(deps Dependencies, statsProvider StatsProvider) *Server {
 	return &Server{
 		healthHandler:      NewHealthHandler(),

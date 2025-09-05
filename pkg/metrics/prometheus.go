@@ -8,6 +8,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Default metrics configuration constants.
+const (
+	defaultRefreshInterval = 10 * time.Second
+)
+
 // MetricsManager manages all Prometheus metrics for the CUJU service.
 type MetricsManager struct {
 	namespace        string
@@ -81,13 +86,13 @@ type MetricsManager struct {
 	systemGCPauseTime    prometheus.Histogram
 }
 
-// Global metrics manager instance
+// Global metrics manager instance.
 var globalManager *MetricsManager
 
-// Custom registry to avoid default Go metrics
+// Custom registry to avoid default Go metrics.
 var customRegistry = prometheus.NewRegistry()
 
-// Initialize global metrics
+// Initialize global metrics.
 func init() {
 	globalManager = NewMetricsManager(WithPrometheusRegistry(customRegistry))
 }
@@ -99,7 +104,7 @@ func NewMetricsManager(opts ...Option) *MetricsManager {
 		subsystem:        "leaderboard",
 		histogramBuckets: prometheus.DefBuckets,
 		enabled:          true,
-		refreshInterval:  10 * time.Second,
+		refreshInterval:  defaultRefreshInterval,
 		customLabels:     make(map[string]string),
 		metricPrefix:     "",
 		registry:         prometheus.DefaultRegisterer,
@@ -116,7 +121,7 @@ func NewMetricsManager(opts ...Option) *MetricsManager {
 	return m
 }
 
-// initializeMetrics creates all the Prometheus metrics
+// initializeMetrics creates all the Prometheus metrics.
 func (m *MetricsManager) initializeMetrics() {
 	// Ensure metrics are registered on the configured registry (custom by default)
 	auto := promauto.With(m.registry)
@@ -451,194 +456,194 @@ func (m *MetricsManager) initializeMetrics() {
 	})
 }
 
-// RecordEventProcessed increments the events processed counter
+// RecordEventProcessed increments the events processed counter.
 func RecordEventProcessed() {
 	globalManager.eventsProcessed.Inc()
 }
 
-// RecordEventDuplicate increments the duplicate events counter
+// RecordEventDuplicate increments the duplicate events counter.
 func RecordEventDuplicate() {
 	globalManager.eventsDuplicate.Inc()
 }
 
-// RecordScoringLatency records scoring latency in milliseconds
+// RecordScoringLatency records scoring latency in milliseconds.
 func RecordScoringLatency(latencyMs float64) {
 	globalManager.scoringLatency.Observe(latencyMs)
 }
 
-// RecordLeaderboardUpdate increments the leaderboard updates counter
+// RecordLeaderboardUpdate increments the leaderboard updates counter.
 func RecordLeaderboardUpdate() {
 	globalManager.leaderboardUpdates.Inc()
 }
 
-// UpdateQueueSize sets the current queue size
+// UpdateQueueSize sets the current queue size.
 func UpdateQueueSize(size int) {
 	globalManager.queueSize.Set(float64(size))
 }
 
-// UpdateWorkerCount sets the current worker count
+// UpdateWorkerCount sets the current worker count.
 func UpdateWorkerCount(count int) {
 	globalManager.workerCount.Set(float64(count))
 }
 
-// UpdateTotalTalents sets the total talents count
+// UpdateTotalTalents sets the total talents count.
 func UpdateTotalTalents(count int) {
 	globalManager.totalTalents.Set(float64(count))
 }
 
-// RecordHTTPRequest records an HTTP request
+// RecordHTTPRequest records an HTTP request.
 func RecordHTTPRequest(endpoint, method, statusCode string) {
 	globalManager.httpRequests.WithLabelValues(endpoint, method, statusCode).Inc()
 }
 
-// RecordHTTPRequestDuration records HTTP request duration
+// RecordHTTPRequestDuration records HTTP request duration.
 func RecordHTTPRequestDuration(endpoint, method, statusCode string, duration float64) {
 	globalManager.httpRequestDuration.WithLabelValues(endpoint, method, statusCode).Observe(duration)
 }
 
-// RecordScoringError increments the scoring errors counter
+// RecordScoringError increments the scoring errors counter.
 func RecordScoringError() {
 	globalManager.scoringErrors.Inc()
 }
 
-// RecordLeaderboardError increments the leaderboard errors counter
+// RecordLeaderboardError increments the leaderboard errors counter.
 func RecordLeaderboardError() {
 	globalManager.leaderboardErrors.Inc()
 }
 
-// Repository Metrics Functions
+// Repository Metrics Functions.
 
-// UpdateRepositoryShardCount sets the total number of repository shards
+// UpdateRepositoryShardCount sets the total number of repository shards.
 func UpdateRepositoryShardCount(count int) {
 	globalManager.repositoryShardCount.Set(float64(count))
 }
 
-// UpdateRepositoryRecordsTotal sets the total number of records across all shards
+// UpdateRepositoryRecordsTotal sets the total number of records across all shards.
 func UpdateRepositoryRecordsTotal(count int) {
 	globalManager.repositoryRecordsTotal.Set(float64(count))
 }
 
-// UpdateRepositoryRecordsPerShard sets the number of records for a specific shard
+// UpdateRepositoryRecordsPerShard sets the number of records for a specific shard.
 func UpdateRepositoryRecordsPerShard(shardID string, count int) {
 	globalManager.repositoryRecordsPerShard.WithLabelValues(shardID).Set(float64(count))
 }
 
-// UpdateRepositoryShardUtilization sets the utilization ratio for a specific shard
+// UpdateRepositoryShardUtilization sets the utilization ratio for a specific shard.
 func UpdateRepositoryShardUtilization(shardID string, utilization float64) {
 	globalManager.repositoryShardUtilization.WithLabelValues(shardID).Set(utilization)
 }
 
-// RecordRepositoryUpdateLatency records repository update operation latency
+// RecordRepositoryUpdateLatency records repository update operation latency.
 func RecordRepositoryUpdateLatency(latencyMs float64) {
 	globalManager.repositoryUpdateLatency.Observe(latencyMs)
 }
 
-// RecordRepositoryQueryLatency records repository query operation latency
+// RecordRepositoryQueryLatency records repository query operation latency.
 func RecordRepositoryQueryLatency(latencyMs float64) {
 	globalManager.repositoryQueryLatency.Observe(latencyMs)
 }
 
-// Snapshot Metrics Functions
+// Snapshot Metrics Functions.
 
-// Queue Metrics Functions
+// Queue Metrics Functions.
 
-// UpdateQueueCapacity sets the maximum queue capacity
+// UpdateQueueCapacity sets the maximum queue capacity.
 func UpdateQueueCapacity(capacity int) {
 	globalManager.queueCapacity.Set(float64(capacity))
 }
 
-// UpdateQueueUtilization sets the queue utilization ratio
+// UpdateQueueUtilization sets the queue utilization ratio.
 func UpdateQueueUtilization(utilization float64) {
 	globalManager.queueUtilization.Set(utilization)
 }
 
-// RecordQueueEnqueue increments the enqueue counter
+// RecordQueueEnqueue increments the enqueue counter.
 func RecordQueueEnqueue() {
 	globalManager.queueEnqueueRate.Inc()
 }
 
-// RecordQueueDequeue increments the dequeue counter
+// RecordQueueDequeue increments the dequeue counter.
 func RecordQueueDequeue() {
 	globalManager.queueDequeueRate.Inc()
 }
 
-// RecordQueueEnqueueError increments the enqueue error counter
+// RecordQueueEnqueueError increments the enqueue error counter.
 func RecordQueueEnqueueError() {
 	globalManager.queueEnqueueErrors.Inc()
 }
 
-// RecordQueueProcessingLatency records queue processing latency
+// RecordQueueProcessingLatency records queue processing latency.
 func RecordQueueProcessingLatency(latencyMs float64) {
 	globalManager.queueProcessingLatency.Observe(latencyMs)
 }
 
-// Worker Metrics Functions
+// Worker Metrics Functions.
 
-// UpdateWorkerActiveCount sets the number of active workers
+// UpdateWorkerActiveCount sets the number of active workers.
 func UpdateWorkerActiveCount(count int) {
 	globalManager.workerActiveCount.Set(float64(count))
 }
 
-// UpdateWorkerIdleCount sets the number of idle workers
+// UpdateWorkerIdleCount sets the number of idle workers.
 func UpdateWorkerIdleCount(count int) {
 	globalManager.workerIdleCount.Set(float64(count))
 }
 
-// UpdateWorkerMessagesPerSecond sets the average messages processed per second
+// UpdateWorkerMessagesPerSecond sets the average messages processed per second.
 func UpdateWorkerMessagesPerSecond(rate float64) {
 	globalManager.workerMessagesPerSecond.Set(rate)
 }
 
-// RecordWorkerProcessingLatency records worker processing latency
+// RecordWorkerProcessingLatency records worker processing latency.
 func RecordWorkerProcessingLatency(latencyMs float64) {
 	globalManager.workerProcessingLatency.Observe(latencyMs)
 }
 
-// RecordWorkerError increments the worker error counter
+// RecordWorkerError increments the worker error counter.
 func RecordWorkerError() {
 	globalManager.workerErrorRate.Inc()
 }
 
-// Enhanced Error Metrics Functions
+// Enhanced Error Metrics Functions.
 
-// RecordErrorByComponent records an error with component and type labels
+// RecordErrorByComponent records an error with component and type labels.
 func RecordErrorByComponent(component, errorType string) {
 	globalManager.errorRateByComponent.WithLabelValues(component, errorType).Inc()
 }
 
-// RecordErrorByType records an error with type and severity labels
+// RecordErrorByType records an error with type and severity labels.
 func RecordErrorByType(errorType, severity string) {
 	globalManager.errorRateByType.WithLabelValues(errorType, severity).Inc()
 }
 
-// RecordErrorByEndpoint records an error with endpoint, method, and error type labels
+// RecordErrorByEndpoint records an error with endpoint, method, and error type labels.
 func RecordErrorByEndpoint(endpoint, method, errorType string) {
 	globalManager.errorRateByEndpoint.WithLabelValues(endpoint, method, errorType).Inc()
 }
 
-// RecordErrorLatency records the latency of an operation that resulted in an error
+// RecordErrorLatency records the latency of an operation that resulted in an error.
 func RecordErrorLatency(component, errorType string, latencyMs float64) {
 	globalManager.errorLatency.WithLabelValues(component, errorType).Observe(latencyMs)
 }
 
-// System Performance Metrics Functions
+// System Performance Metrics Functions.
 
-// UpdateSystemMemoryUsage sets the system memory usage in bytes
+// UpdateSystemMemoryUsage sets the system memory usage in bytes.
 func UpdateSystemMemoryUsage(bytes uint64) {
 	globalManager.systemMemoryUsage.Set(float64(bytes))
 }
 
-// UpdateSystemGoroutineCount sets the number of goroutines
+// UpdateSystemGoroutineCount sets the number of goroutines.
 func UpdateSystemGoroutineCount(count int) {
 	globalManager.systemGoroutineCount.Set(float64(count))
 }
 
-// RecordSystemGCPauseTime records GC pause time in milliseconds
+// RecordSystemGCPauseTime records GC pause time in milliseconds.
 func RecordSystemGCPauseTime(pauseMs float64) {
 	globalManager.systemGCPauseTime.Observe(pauseMs)
 }
 
-// GetRegistry returns the custom Prometheus registry used by our metrics
+// GetRegistry returns the custom Prometheus registry used by our metrics.
 func GetRegistry() *prometheus.Registry {
 	return customRegistry
 }

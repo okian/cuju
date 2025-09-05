@@ -15,7 +15,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-// Mock implementations for testing
+// Mock implementations for testing.
 type mockQueue struct {
 	eventChan  chan queue.Event
 	closeError error

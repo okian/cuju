@@ -9,23 +9,23 @@ import (
 	"github.com/okian/cuju/internal/domain/dedupe"
 )
 
-// EventDependencies defines the interface for event processing dependencies
+// EventDependencies defines the interface for event processing dependencies.
 type EventDependencies interface {
 	dedupe.Deduper
 	Enqueue(ctx context.Context, e any) bool
 }
 
-// EventsHandler handles event requests
+// EventsHandler handles event requests.
 type EventsHandler struct {
 	deps EventDependencies
 }
 
-// NewEventsHandler creates a new events handler
+// NewEventsHandler creates a new events handler.
 func NewEventsHandler(deps EventDependencies) *EventsHandler {
 	return &EventsHandler{deps: deps}
 }
 
-// HandlePostEvent handles POST /events requests
+// HandlePostEvent handles POST /events requests.
 func (h *EventsHandler) HandlePostEvent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)

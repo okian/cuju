@@ -13,13 +13,13 @@ import (
 	"time"
 )
 
-// HTTPClient wraps http.Client with timeout
+// HTTPClient wraps http.Client with timeout.
 type HTTPClient struct {
 	client  *http.Client
 	timeout time.Duration
 }
 
-// newHTTPClient creates a new HTTP client with timeout
+// newHTTPClient creates a new HTTP client with timeout.
 func newHTTPClient(timeout time.Duration) *HTTPClient {
 	return &HTTPClient{
 		client: &http.Client{
@@ -29,12 +29,12 @@ func newHTTPClient(timeout time.Duration) *HTTPClient {
 	}
 }
 
-// Get performs a GET request
+// Get performs a GET request.
 func (c *HTTPClient) Get(url string) (*http.Response, error) {
 	return c.client.Get(url)
 }
 
-// Post performs a POST request with JSON body
+// Post performs a POST request with JSON body.
 func (c *HTTPClient) Post(url string, body interface{}) (*http.Response, error) {
 	jsonData, err := marshalJSON(body)
 	if err != nil {
@@ -50,17 +50,17 @@ func (c *HTTPClient) Post(url string, body interface{}) (*http.Response, error) 
 	return c.client.Do(req)
 }
 
-// marshalJSON marshals a struct to JSON
+// marshalJSON marshals a struct to JSON.
 func marshalJSON(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-// unmarshalJSON unmarshals JSON to a struct
+// unmarshalJSON unmarshals JSON to a struct.
 func unmarshalJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
-// readResponseBody reads and closes the response body
+// readResponseBody reads and closes the response body.
 func readResponseBody(resp *http.Response) ([]byte, error) {
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -70,7 +70,7 @@ func readResponseBody(resp *http.Response) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// submitEvents submits events concurrently using worker pools
+// submitEvents submits events concurrently using worker pools.
 func submitEvents(ctx context.Context, config *Config, events []Event, stats *Stats) error {
 	log.Printf("📤 Submitting %d events with %d workers...", len(events), config.Workers)
 
@@ -90,7 +90,7 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 	reportInterval := 1 * time.Second
 
 	// Create worker pool
-	eventChan := make(chan Event, config.Workers*2)
+	eventChan := make(chan Event, config.Workers*WorkerChannelMultiplier)
 	var wg sync.WaitGroup
 
 	// Start workers
@@ -129,7 +129,7 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 							log.Printf("📊 Progress: %d/%d submitted (success: %d, duplicate: %d, failed: %d)",
 								total, len(events), succ, dup, fail)
 						} else {
-							fmt.Printf("\r📤 Submitted: %d/%d (success: %d, duplicate: %d, failed: %d)",
+							log.Printf("\r📤 Submitted: %d/%d (success: %d, duplicate: %d, failed: %d)",
 								total, len(events), succ, dup, fail)
 						}
 					}
@@ -155,7 +155,7 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 
 	// Final progress report
 	if !config.Verbose {
-		fmt.Println() // New line after progress indicator
+		log.Println() // New line after progress indicator
 	}
 
 	// Update stats
@@ -173,7 +173,7 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 	return nil
 }
 
-// submitSingleEvent submits a single event and returns the result
+// submitSingleEvent submits a single event and returns the result.
 func submitSingleEvent(_ context.Context, client *HTTPClient, url string, event Event) string {
 	resp, err := client.Post(url, event)
 	if err != nil {
@@ -193,14 +193,14 @@ func submitSingleEvent(_ context.Context, client *HTTPClient, url string, event 
 
 	// Parse response based on status code
 	switch resp.StatusCode {
-	case 202:
+	case StatusAccepted:
 		// Accepted - new event
 		var ack AckResponse
 		if err := unmarshalJSON(body, &ack); err == nil && ack.Status == "accepted" {
 			return "success"
 		}
 		return "success" // Assume success for 202 even if parsing fails
-	case 200:
+	case StatusOK:
 		// OK - duplicate event
 		var ack AckResponse
 		if err := unmarshalJSON(body, &ack); err == nil && ack.Duplicate {

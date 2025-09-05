@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// floatEqual compares two float64 values with a small tolerance for floating-point precision
+// floatEqual compares two float64 values with a small tolerance for floating-point precision.
 func floatEqual(a, b float64) bool {
 	const tolerance = 1e-10
 	return math.Abs(a-b) < tolerance
@@ -334,7 +334,7 @@ func TestTreapStore_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestMultipleScoresPerTalent demonstrates that each talent gets multiple random scores
+// TestMultipleScoresPerTalent demonstrates that each talent gets multiple random scores.
 func TestMultipleScoresPerTalent(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
@@ -352,19 +352,19 @@ func TestMultipleScoresPerTalent(t *testing.T) {
 
 			switch k % 5 {
 			case 0: // Initial scores (0-200)
-				score = rand.Float64() * 200.0
+				score = rand.Float64() * 200.0 //nolint:gosec // test data generation
 			case 1: // Beginner scores (200-400)
-				score = 200.0 + rand.Float64()*200.0
+				score = 200.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
 			case 2: // Intermediate scores (400-600)
-				score = 400.0 + rand.Float64()*200.0
+				score = 400.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
 			case 3: // Advanced scores (600-800)
-				score = 600.0 + rand.Float64()*200.0
+				score = 600.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
 			case 4: // Elite scores (800-1000)
-				score = 800.0 + rand.Float64()*200.0
+				score = 800.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
 			}
 
 			// Add random variation
-			variation := (rand.Float64() - 0.5) * 50.0
+			variation := (rand.Float64() - 0.5) * 50.0 //nolint:gosec // test data generation
 			score += variation
 
 			if score < 0 {
@@ -527,7 +527,7 @@ func TestTreapStore_RankCorrectnessUnderStress(t *testing.T) {
 
 	for i := 0; i < numTalents; i++ {
 		talents[i] = fmt.Sprintf("talent_%d", i)
-		scores[i] = rand.Float64() * 10000.0
+		scores[i] = rand.Float64() * 10000.0 //nolint:gosec // test data generation
 
 		updated, err := store.UpdateBest(ctx, talents[i], scores[i])
 		if err != nil {
@@ -611,7 +611,7 @@ func TestTreapStore_ConcurrentScoreUpdates(t *testing.T) {
 
 				_, err := store.UpdateBest(ctx, talentID, score)
 				if err != nil {
-					errors <- fmt.Errorf("goroutine %d update %d failed: %v", goroutineID, u, err)
+					errors <- fmt.Errorf("goroutine %d update %d failed: %w", goroutineID, u, err)
 				}
 			}
 		}(g)

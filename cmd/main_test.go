@@ -20,13 +20,13 @@ func TestMainFunction(t *testing.T) {
 	Convey("Given the main application", t, func() {
 		Convey("When testing configuration loading", func() {
 			// Test with environment variables
-			os.Setenv("CUJU_ADDR", ":8080")
-			os.Setenv("CUJU_QUEUE_SIZE", "1000")
-			os.Setenv("CUJU_WORKER_COUNT", "4")
+			_ = os.Setenv("CUJU_ADDR", ":8080")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "1000")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "4")
 			defer func() {
-				os.Unsetenv("CUJU_ADDR")
-				os.Unsetenv("CUJU_QUEUE_SIZE")
-				os.Unsetenv("CUJU_WORKER_COUNT")
+				_ = os.Unsetenv("CUJU_ADDR")
+				_ = os.Unsetenv("CUJU_QUEUE_SIZE")
+				_ = os.Unsetenv("CUJU_WORKER_COUNT")
 			}()
 
 			Convey("Then configuration should be loadable", func() {
@@ -129,13 +129,13 @@ func TestMainApplicationIntegration(t *testing.T) {
 	Convey("Given main application integration", t, func() {
 		Convey("When testing full application setup", func() {
 			// Set up test environment
-			os.Setenv("CUJU_ADDR", ":8080")
-			os.Setenv("CUJU_QUEUE_SIZE", "1000")
-			os.Setenv("CUJU_WORKER_COUNT", "2")
+			_ = os.Setenv("CUJU_ADDR", ":8080")
+			_ = os.Setenv("CUJU_QUEUE_SIZE", "1000")
+			_ = os.Setenv("CUJU_WORKER_COUNT", "2")
 			defer func() {
-				os.Unsetenv("CUJU_ADDR")
-				os.Unsetenv("CUJU_QUEUE_SIZE")
-				os.Unsetenv("CUJU_WORKER_COUNT")
+				_ = os.Unsetenv("CUJU_ADDR")
+				_ = os.Unsetenv("CUJU_QUEUE_SIZE")
+				_ = os.Unsetenv("CUJU_WORKER_COUNT")
 			}()
 
 			Convey("Then all components should work together", func() {
@@ -178,8 +178,8 @@ func TestMainApplicationErrorHandling(t *testing.T) {
 	Convey("Given main application error handling", t, func() {
 		Convey("When testing invalid configuration", func() {
 			// Set invalid configuration
-			os.Setenv("CUJU_ADDR", "")
-			defer os.Unsetenv("CUJU_ADDR")
+			_ = os.Setenv("CUJU_ADDR", "")
+			defer func() { _ = os.Unsetenv("CUJU_ADDR") }()
 
 			Convey("Then configuration loading should fail", func() {
 				ctx := context.Background()

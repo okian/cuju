@@ -7,7 +7,7 @@ import (
 	"sort"
 )
 
-// verifyResults verifies the consistency of rankings and leaderboard
+// verifyResults verifies the consistency of rankings and leaderboard.
 func verifyResults(ctx context.Context, config *Config, rankings, leaderboard []Entry, stats *Stats) error {
 	log.Println("🔍 Verifying results...")
 
@@ -38,7 +38,7 @@ func verifyResults(ctx context.Context, config *Config, rankings, leaderboard []
 	return nil
 }
 
-// verifyLeaderboardConsistency checks if leaderboard matches top rankings
+// verifyLeaderboardConsistency checks if leaderboard matches top rankings.
 func verifyLeaderboardConsistency(sortedRankings, leaderboard []Entry) error {
 	if len(leaderboard) == 0 {
 		return fmt.Errorf("empty leaderboard")
@@ -69,7 +69,7 @@ func verifyLeaderboardConsistency(sortedRankings, leaderboard []Entry) error {
 	return nil
 }
 
-// displayTopPerformers shows the top performers from rankings and leaderboard
+// displayTopPerformers shows the top performers from rankings and leaderboard.
 func displayTopPerformers(sortedRankings, leaderboard []Entry, verbose bool) {
 	topN := 10
 	if len(sortedRankings) < topN {
@@ -111,7 +111,7 @@ func displayTopPerformers(sortedRankings, leaderboard []Entry, verbose bool) {
 	}
 }
 
-// calculateAverageScore calculates the average score from rankings
+// calculateAverageScore calculates the average score from rankings.
 func calculateAverageScore(rankings []Entry) float64 {
 	if len(rankings) == 0 {
 		return 0

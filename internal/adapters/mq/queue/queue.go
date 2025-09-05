@@ -13,6 +13,12 @@ import (
 	"github.com/okian/cuju/pkg/metrics"
 )
 
+// Default queue configuration constants.
+const (
+	defaultQueueCapacity = 100000
+	defaultBufferSize    = 100000
+)
+
 // Event represents the payload type flowing through the queue.
 // Using the model.Event type for type safety.
 type Event = model.Event
@@ -38,7 +44,7 @@ type Queue interface {
 	IsClosed() bool
 }
 
-// InMemoryQueue implements Queue using a buffered channel
+// InMemoryQueue implements Queue using a buffered channel.
 type InMemoryQueue struct {
 	events     chan Event
 	capacity   int
@@ -51,8 +57,8 @@ type InMemoryQueue struct {
 // NewInMemoryQueue creates a new in-memory queue with configuration options.
 func NewInMemoryQueue(opts ...Option) *InMemoryQueue {
 	q := &InMemoryQueue{
-		capacity:   100000, // default capacity
-		bufferSize: 100000, // default buffer size
+		capacity:   defaultQueueCapacity, // default capacity
+		bufferSize: defaultBufferSize,    // default buffer size
 	}
 
 	// Apply all options
@@ -71,7 +77,7 @@ func NewInMemoryQueue(opts ...Option) *InMemoryQueue {
 	return q
 }
 
-// Enqueue adds an event to the queue
+// Enqueue adds an event to the queue.
 func (q *InMemoryQueue) Enqueue(ctx context.Context, e Event) bool {
 	start := time.Now()
 	defer func() {
@@ -115,7 +121,7 @@ func (q *InMemoryQueue) Enqueue(ctx context.Context, e Event) bool {
 	}
 }
 
-// Dequeue returns a channel that will receive events as they become available
+// Dequeue returns a channel that will receive events as they become available.
 func (q *InMemoryQueue) Dequeue(ctx context.Context) <-chan Event {
 	// Wrap the channel to track dequeue metrics
 	dequeueChan := make(chan Event)
@@ -138,7 +144,7 @@ func (q *InMemoryQueue) Dequeue(ctx context.Context) <-chan Event {
 	return dequeueChan
 }
 
-// Len returns the current number of queued events
+// Len returns the current number of queued events.
 func (q *InMemoryQueue) Len(ctx context.Context) int {
 	size := len(q.events)
 	metrics.UpdateQueueSize(size)
@@ -147,7 +153,7 @@ func (q *InMemoryQueue) Len(ctx context.Context) int {
 	return size
 }
 
-// Close gracefully shuts down the queue
+// Close gracefully shuts down the queue.
 func (q *InMemoryQueue) Close() error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -163,7 +169,7 @@ func (q *InMemoryQueue) Close() error {
 	return nil
 }
 
-// IsClosed returns true if the queue has been closed
+// IsClosed returns true if the queue has been closed.
 func (q *InMemoryQueue) IsClosed() bool {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
