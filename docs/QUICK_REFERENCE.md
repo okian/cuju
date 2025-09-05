@@ -27,8 +27,8 @@ export CUJU_CONFIG=./config.yaml
 # config.yaml
 log_level: "info"
 addr: ":9080"
-queue_size: 100000
-worker_count: 16
+queue_size: 200000
+# worker_count: 16  # Defaults to 20x CPU cores
 dedupe_size: 500000
 scoring_latency_min_ms: 80
 scoring_latency_max_ms: 150
@@ -74,7 +74,7 @@ curl "http://localhost:9080/rank/t1"
                                               ▼
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐
 │ Repository  │◀───│   Worker     │◀───│    Queue    │
-│ (TreapStore)│    │    Pool      │    │             │
+│ (Single Treap)│   │    Pool      │    │             │
 └─────────────┘    └──────────────┘    └─────────────┘
        │                   │
        ▼                   ▼
@@ -109,8 +109,7 @@ Where:
 
 ## 🔍 Monitoring
 
-- **Health Check**: `GET /healthz`
-- **Metrics**: `GET /metrics` (Prometheus format)
+- **Health Check**: `GET /healthz` (Prometheus metrics)
 - **Dashboard**: `GET /dashboard` (Web UI)
 - **Stats**: `GET /stats` (JSON statistics)
 

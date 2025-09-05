@@ -540,26 +540,6 @@ func RecordRepositoryQueryLatency(latencyMs float64) {
 
 // Snapshot Metrics Functions
 
-// RecordRepositorySnapshotRebuildDuration records snapshot rebuild duration in ms
-func RecordRepositorySnapshotRebuildDuration(latencyMs float64) {
-	globalManager.repositorySnapshotRebuildDuration.Observe(latencyMs)
-}
-
-// UpdateRepositorySnapshotLastUnix sets the unix seconds of last snapshot
-func UpdateRepositorySnapshotLastUnix(unixSeconds float64) {
-	globalManager.repositorySnapshotLastUnix.Set(unixSeconds)
-}
-
-// IncrementRepositorySnapshotCount increments the snapshot counter
-func IncrementRepositorySnapshotCount() {
-	globalManager.repositorySnapshotCount.Inc()
-}
-
-// UpdateRepositorySnapshotLastDurationMs sets last snapshot duration in ms
-func UpdateRepositorySnapshotLastDurationMs(ms float64) {
-	globalManager.repositorySnapshotLastDurationMs.Set(ms)
-}
-
 // Queue Metrics Functions
 
 // UpdateQueueCapacity sets the maximum queue capacity
@@ -585,11 +565,6 @@ func RecordQueueDequeue() {
 // RecordQueueEnqueueError increments the enqueue error counter
 func RecordQueueEnqueueError() {
 	globalManager.queueEnqueueErrors.Inc()
-}
-
-// RecordQueueDequeueError increments the dequeue error counter
-func RecordQueueDequeueError() {
-	globalManager.queueDequeueErrors.Inc()
 }
 
 // RecordQueueProcessingLatency records queue processing latency
@@ -622,11 +597,6 @@ func RecordWorkerProcessingLatency(latencyMs float64) {
 // RecordWorkerError increments the worker error counter
 func RecordWorkerError() {
 	globalManager.workerErrorRate.Inc()
-}
-
-// RecordWorkerRetry increments the worker retry counter
-func RecordWorkerRetry() {
-	globalManager.workerRetryCount.Inc()
 }
 
 // Enhanced Error Metrics Functions

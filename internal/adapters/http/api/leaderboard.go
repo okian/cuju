@@ -26,7 +26,6 @@ func NewLeaderboardHandler(deps LeaderboardDependencies) *LeaderboardHandler {
 
 // HandleGetLeaderboard handles GET /leaderboard?limit=N requests
 func (h *LeaderboardHandler) HandleGetLeaderboard(w http.ResponseWriter, r *http.Request) {
-	const op = "api.get_leaderboard"
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return
@@ -37,6 +36,7 @@ func (h *LeaderboardHandler) HandleGetLeaderboard(w http.ResponseWriter, r *http
 		writeError(w, http.StatusBadRequest, "bad_request", ErrBadRequest)
 		return
 	}
+
 	entries, err := h.deps.TopN(r.Context(), n)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", err)

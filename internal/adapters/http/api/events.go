@@ -27,7 +27,6 @@ func NewEventsHandler(deps EventDependencies) *EventsHandler {
 
 // HandlePostEvent handles POST /events requests
 func (h *EventsHandler) HandlePostEvent(w http.ResponseWriter, r *http.Request) {
-	const op = "api.post_event"
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return

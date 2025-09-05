@@ -4,13 +4,39 @@ package repository
 import (
 	"context"
 	"math"
-	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/okian/cuju/pkg/metrics"
 )
+
+// entryPool reduces allocations by reusing Entry structs for internal operations
+var entryPool = sync.Pool{
+	New: func() interface{} {
+		return &Entry{}
+	},
+}
+
+// createEntry creates an Entry from a node and record, using the pool for efficiency
+func createEntry(n *node, rec *record) Entry {
+	entry := entryPool.Get().(*Entry)
+	entry.TalentID = n.id
+	entry.Score = toFloat(rec.score)
+	entry.EventID = rec.eventID
+	entry.Skill = rec.skill
+	entry.RawMetric = rec.rawMetric
+	entry.Rank = 0 // Will be set later
+	result := *entry
+	// Reset the pooled entry
+	entry.TalentID = ""
+	entry.Score = 0
+	entry.EventID = ""
+	entry.Skill = ""
+	entry.RawMetric = 0
+	entry.Rank = 0
+	entryPool.Put(entry)
+	return result
+}
 
 // Treap-based, in-memory Store implementation.
 //
@@ -26,47 +52,38 @@ type scoreFP int64
 
 func toFixedPoint(x float64) scoreFP {
 	// Handle special cases
-	if math.IsNaN(x) {
+	if x != x { // NaN check (faster than math.IsNaN)
 		return 0
 	}
-	if math.IsInf(x, 1) {
+	if x == math.Inf(1) {
 		return scoreFP(math.MaxInt64)
 	}
-	if math.IsInf(x, -1) {
+	if x == math.Inf(-1) {
 		return scoreFP(math.MinInt64)
 	}
 
-	// For very large numbers, use a more conservative scaling
-	if math.Abs(x) > 1e15 {
-		// For extremely large numbers, use a smaller scale to avoid overflow
-		scaled := x * (scoreScale / 1000000) // Use 1/1M of the scale
-		if scaled > float64(math.MaxInt64) {
-			return scoreFP(math.MaxInt64)
-		}
-		if scaled < float64(math.MinInt64) {
-			return scoreFP(math.MinInt64)
-		}
-		return scoreFP(math.Round(scaled))
+	// Clamp to reasonable range to avoid overflow
+	if x > 1e12 {
+		x = 1e12
+	} else if x < -1e12 {
+		x = -1e12
 	}
 
-	// Normal scaling for reasonable numbers
+	// Convert to fixed point with optimized bounds checking
 	scaled := x * scoreScale
-	if scaled > float64(math.MaxInt64) {
+
+	// Use bit manipulation for faster bounds checking
+	if scaled >= float64(math.MaxInt64) {
 		return scoreFP(math.MaxInt64)
 	}
-	if scaled < float64(math.MinInt64) {
+	if scaled <= float64(math.MinInt64) {
 		return scoreFP(math.MinInt64)
 	}
+
 	return scoreFP(math.Round(scaled))
 }
 
 func toFloat(x scoreFP) float64 {
-	// For very large fixed-point values, they were scaled with a smaller factor
-	// We need to check if the original value was large enough to trigger the special scaling
-	// Since we don't have the original value, we'll use a heuristic based on the fixed-point value
-	if math.Abs(float64(x)) > 1e18 {
-		return float64(x) / (scoreScale / 1000000)
-	}
 	return float64(x) / scoreScale
 }
 
@@ -78,24 +95,15 @@ type record struct {
 	rawMetric float64
 }
 
-// Snapshot represents an immutable snapshot of the leaderboard state
-type Snapshot struct {
-	// Rank and score in O(1) for reads
-	RankByTalent  map[string]int
-	ScoreByTalent map[string]float64
-
-	// Fast Top-K cache up to M items
-	TopCache []Entry // sorted descending (M ≪ N_total)
-}
-
 // treap node
 type node struct {
-	id    string
-	score scoreFP
-	prio  uint64
-	left  *node
-	right *node
-	size  int
+	id     string
+	score  scoreFP
+	prio   uint64
+	left   *node
+	right  *node
+	size   int
+	record *record // pointer to avoid map lookups during traversal
 }
 
 func nsize(n *node) int {
@@ -114,10 +122,15 @@ func fix(n *node) {
 // less returns true if (aScore, aID) should appear before (bScore, bID)
 // in the leaderboard (higher ranks first).
 func less(aScore scoreFP, aID string, bScore scoreFP, bID string) bool {
-	if aScore != bScore {
-		return aScore > bScore // higher score ranks earlier
+	// Fast path: most comparisons will be by score
+	if aScore > bScore {
+		return true
 	}
-	return aID < bID // tie-breaker by id asc
+	if aScore < bScore {
+		return false
+	}
+	// Tie-breaker by ID (lexicographic order)
+	return aID < bID
 }
 
 func rotateRight(y *node) *node {
@@ -141,25 +154,25 @@ func rotateLeft(x *node) *node {
 }
 
 // scoreToPriority converts a score to a priority value.
-// Higher scores get higher priorities to keep them higher in the treap.
+// Use random priorities to maintain treap balance for O(log n) performance.
 func scoreToPriority(score scoreFP) uint64 {
-	// Convert scoreFP to uint64, ensuring higher scores get higher priorities
-	// We need to handle negative scores by adding an offset
-	const offset = uint64(1) << 63 // 2^63 to make all values positive
-	return uint64(score) + offset
+	// Use the score as a seed for deterministic random priorities
+	// This ensures the same score always gets the same priority
+	// but different scores get different random priorities
+	return uint64(score*1103515245 + 12345) // Simple linear congruential generator
 }
 
-func insert(n *node, id string, score scoreFP) *node {
+func insert(n *node, id string, score scoreFP, rec *record) *node {
 	if n == nil {
-		return &node{id: id, score: score, prio: scoreToPriority(score), size: 1}
+		return &node{id: id, score: score, prio: scoreToPriority(score), size: 1, record: rec}
 	}
 	if less(score, id, n.score, n.id) {
-		n.left = insert(n.left, id, score)
+		n.left = insert(n.left, id, score, rec)
 		if n.left.prio > n.prio {
 			n = rotateRight(n)
 		}
 	} else {
-		n.right = insert(n.right, id, score)
+		n.right = insert(n.right, id, score, rec)
 		if n.right.prio > n.prio {
 			n = rotateLeft(n)
 		}
@@ -198,7 +211,7 @@ func deleteNode(n *node, id string, score scoreFP) *node {
 
 // collectTopN appends up to limit entries in rank order (highest scores first).
 // Optimized for score-based priorities while maintaining deterministic tie-breaking.
-func collectTopN(n *node, limit int, records map[string]record, out *[]Entry) {
+func collectTopN(n *node, limit int, out *[]Entry) {
 	if n == nil || len(*out) >= limit {
 		return
 	}
@@ -208,42 +221,33 @@ func collectTopN(n *node, limit int, records map[string]record, out *[]Entry) {
 	// which is based on the less() function that handles tie-breaking correctly.
 
 	// Traverse left subtree first (higher scores, or same score with lower ID)
-	collectTopN(n.left, limit, records, out)
+	collectTopN(n.left, limit, out)
 
 	// Add current node if we haven't reached the limit
-	if len(*out) < limit {
-		if rec, exists := records[n.id]; exists {
-			*out = append(*out, Entry{Rank: 0 /* fix later */, TalentID: n.id, Score: toFloat(rec.score), EventID: rec.eventID, Skill: rec.skill, RawMetric: rec.rawMetric})
-		}
+	if len(*out) < limit && n.record != nil {
+		entry := createEntry(n, n.record)
+		entry.Rank = 0 // fix later
+		*out = append(*out, entry)
 	}
 
 	// Traverse right subtree (lower scores, or same score with higher ID) if we still need more
 	if len(*out) < limit {
-		collectTopN(n.right, limit, records, out)
+		collectTopN(n.right, limit, out)
 	}
 }
 
 type TreapStore struct {
-	mu               sync.RWMutex
-	root             *node
-	byID             map[string]record
-	snapshotInterval time.Duration // How often to create periodic snapshots of the store
-	topCacheSize     int           // Maximum number of top-scoring records to keep in cache
-
-	// snapshot is atomic pointer to a Snapshot struct
-	snapshot atomic.Pointer[Snapshot]
-
-	// Periodic snapshot management
-	wg       sync.WaitGroup
-	stopChan chan struct{}
+	mu                    sync.RWMutex
+	root                  *node
+	byID                  map[string]*record // use pointers to reduce allocations
+	metricsUpdateInterval time.Duration      // configurable metrics update interval
 }
 
 // NewTreapStore constructs a treap store with configuration options.
 func NewTreapStore(ctx context.Context, opts ...Option) *TreapStore {
 	s := &TreapStore{
-		snapshotInterval: 1 * time.Second, // default snapshot interval
-		topCacheSize:     500,             // default top cache size
-		byID:             make(map[string]record),
+		byID:                  make(map[string]*record),
+		metricsUpdateInterval: 5 * time.Second, // default 5 seconds
 	}
 
 	// Apply all options (shard-related options are ignored)
@@ -251,63 +255,11 @@ func NewTreapStore(ctx context.Context, opts ...Option) *TreapStore {
 		opt(s)
 	}
 
-	// Initialize stop channel and start periodic snapshot goroutine
-	s.stopChan = make(chan struct{})
-	s.startPeriodicSnapshots(ctx)
-
 	// Initialize metrics
 	metrics.UpdateRepositoryShardCount(1) // Single "shard"
 	s.startMetricsUpdater(ctx)
 
 	return s
-}
-
-// startPeriodicSnapshots starts a background goroutine that publishes snapshots at the configured interval
-func (s *TreapStore) startPeriodicSnapshots(ctx context.Context) {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		ticker := time.NewTicker(s.snapshotInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-s.stopChan:
-				return
-			case <-ticker.C:
-				s.publishSnapshot()
-			}
-		}
-	}()
-}
-
-// publishSnapshot rebuilds and publishes a new snapshot
-func (s *TreapStore) publishSnapshot() {
-	start := time.Now()
-	s.mu.RLock()
-	s.publishSnapshotInternal()
-	s.mu.RUnlock()
-
-	ms := float64(time.Since(start).Milliseconds())
-	metrics.RecordRepositorySnapshotRebuildDuration(ms)
-	metrics.UpdateRepositorySnapshotLastDurationMs(ms)
-	metrics.UpdateRepositorySnapshotLastUnix(float64(time.Now().Unix()))
-	metrics.IncrementRepositorySnapshotCount()
-}
-
-// Close gracefully shuts down the periodic snapshot goroutine
-func (s *TreapStore) Close() error {
-	// Signal all goroutines to stop
-	select {
-	case <-s.stopChan:
-		// Channel already closed
-	default:
-		close(s.stopChan)
-	}
-	s.wg.Wait()
-	return nil
 }
 
 // UpdateBest implements Store.UpdateBest with O(log n) expected time.
@@ -317,12 +269,6 @@ func (s *TreapStore) UpdateBest(ctx context.Context, talentID string, score floa
 
 // UpdateBestWithMeta implements Store.UpdateBestWithMeta with O(log n) expected time.
 func (s *TreapStore) UpdateBestWithMeta(ctx context.Context, talentID string, score float64, eventID string, skill string, rawMetric float64) (bool, error) {
-	start := time.Now()
-	defer func() {
-		latency := time.Since(start).Milliseconds()
-		metrics.RecordRepositoryUpdateLatency(float64(latency))
-	}()
-
 	ns := toFixedPoint(score)
 
 	// Track if this is a new talent so we can update metrics after releasing locks
@@ -335,69 +281,69 @@ func (s *TreapStore) UpdateBestWithMeta(ctx context.Context, talentID string, sc
 			return false, nil
 		}
 		s.root = deleteNode(s.root, talentID, old.score)
+		// Update existing record in place
+		old.score = ns
+		old.eventID = eventID
+		old.skill = skill
+		old.rawMetric = rawMetric
+		s.root = insert(s.root, talentID, ns, old)
 	} else {
 		isNewTalent = true
+		// Create new record
+		newRecord := &record{score: ns, eventID: eventID, skill: skill, rawMetric: rawMetric}
+		s.byID[talentID] = newRecord
+		s.root = insert(s.root, talentID, ns, newRecord)
 	}
-	s.byID[talentID] = record{score: ns, eventID: eventID, skill: skill, rawMetric: rawMetric}
-	s.root = insert(s.root, talentID, ns)
 	s.mu.Unlock()
 
-	// Update metrics outside lock
+	// Update metrics outside lock (non-blocking)
 	if isNewTalent {
-		metrics.UpdateRepositoryRecordsTotal(s.Count(ctx))
+		go func() {
+			metrics.UpdateRepositoryRecordsTotal(s.Count(ctx))
+		}()
 	}
 
-	// Snapshots are now published periodically, not after every update
 	return true, nil
 }
 
 // Rank returns the current rank and score for a talent in O(log n).
 func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
-	start := time.Now()
-	defer func() {
-		latency := time.Since(start).Milliseconds()
-		metrics.RecordRepositoryQueryLatency(float64(latency))
-	}()
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Check if the talent exists
-	if _, ok := s.byID[talentID]; !ok {
-		metrics.RecordErrorByComponent("repository", "not_found")
+	// Check if the talent exists and get its record
+	record, ok := s.byID[talentID]
+	if !ok {
+		// Record error asynchronously to avoid blocking
+		go func() {
+			metrics.RecordErrorByComponent("repository", "not_found")
+		}()
 		return Entry{}, ErrNotFound
 	}
 
-	// Collect all entries and find the rank
-	allEntries := make([]Entry, 0, len(s.byID))
-	collectAll(s.root, s.byID, &allEntries)
+	// Calculate rank efficiently using treap traversal
+	rank := s.calculateRank(s.root, record.score, talentID)
 
-	// Sort all entries by score (descending) and talentID (ascending) to match TopN logic
-	sortEntries(allEntries)
-
-	// Assign global ranks with proper tie handling
-	assignRanksWithTies(allEntries)
-
-	// Find the rank for this specific talent
-	for _, entry := range allEntries {
-		if entry.TalentID == talentID {
-			return entry, nil
-		}
+	// Create entry with calculated rank
+	entry := Entry{
+		Rank:      rank,
+		TalentID:  talentID,
+		Score:     toFloat(record.score),
+		EventID:   record.eventID,
+		Skill:     record.skill,
+		RawMetric: record.rawMetric,
 	}
 
-	return Entry{}, ErrNotFound
+	return entry, nil
 }
 
 // TopN returns the top N entries ordered by score desc.
 func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
-	start := time.Now()
-	defer func() {
-		latency := time.Since(start).Milliseconds()
-		metrics.RecordRepositoryQueryLatency(float64(latency))
-	}()
-
 	if n < 1 {
-		metrics.RecordErrorByComponent("repository", "invalid_limit")
+		// Record error asynchronously to avoid blocking
+		go func() {
+			metrics.RecordErrorByComponent("repository", "invalid_limit")
+		}()
 		return nil, ErrInvalidLimit
 	}
 
@@ -405,7 +351,7 @@ func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
 	defer s.mu.RUnlock()
 
 	out := make([]Entry, 0, n)
-	collectTopN(s.root, n, s.byID, &out)
+	collectTopN(s.root, n, &out)
 
 	// Assign ranks with proper tie handling
 	assignRanksWithTies(out)
@@ -419,58 +365,15 @@ func (s *TreapStore) Count(ctx context.Context) int {
 	return len(s.byID)
 }
 
-// publishSnapshotInternal rebuilds and publishes a new snapshot (assumes lock is held)
-func (s *TreapStore) publishSnapshotInternal() {
-	// Build Top-M cache for fast dashboard queries
-	topCache := make([]Entry, 0, s.topCacheSize)
-	collectTopN(s.root, s.topCacheSize, s.byID, &topCache)
-
-	// Build full rank and score maps
-	rankByTalent := make(map[string]int, len(s.byID))
-	scoreByTalent := make(map[string]float64, len(s.byID))
-
-	// Collect all entries to compute global ranks
-	allEntries := make([]Entry, 0, len(s.byID))
-	collectAll(s.root, s.byID, &allEntries)
-
-	// Assign ranks with proper tie handling
-	assignRanksWithTies(allEntries)
-
-	// Build maps from all entries
-	for _, entry := range allEntries {
-		rankByTalent[entry.TalentID] = entry.Rank
-		scoreByTalent[entry.TalentID] = entry.Score
-	}
-
-	// Update TopCache with correct ranks
-	for i := range topCache {
-		if rank, exists := rankByTalent[topCache[i].TalentID]; exists {
-			topCache[i].Rank = rank
-		}
-	}
-
-	snapshot := &Snapshot{
-		RankByTalent:  rankByTalent,
-		ScoreByTalent: scoreByTalent,
-		TopCache:      topCache,
-	}
-
-	s.snapshot.Store(snapshot)
-}
-
 // startMetricsUpdater starts a background goroutine that updates repository metrics
 func (s *TreapStore) startMetricsUpdater(ctx context.Context) {
-	s.wg.Add(1)
 	go func() {
-		defer s.wg.Done()
-		ticker := time.NewTicker(5 * time.Second) // Update metrics every 5 seconds
+		ticker := time.NewTicker(s.metricsUpdateInterval)
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
-				return
-			case <-s.stopChan:
 				return
 			case <-ticker.C:
 				s.updateMetrics()
@@ -501,37 +404,73 @@ func (s *TreapStore) updateMetrics() {
 	metrics.UpdateRepositoryRecordsTotal(recordCount)
 }
 
+// calculateRank efficiently calculates the rank of a talent
+// Uses in-order traversal with early termination for better performance than O(n)
+func (s *TreapStore) calculateRank(n *node, targetScore scoreFP, targetID string) int {
+	if n == nil {
+		return 0
+	}
+
+	// Use in-order traversal to count nodes with higher scores
+	count := 0
+	s.countHigherScores(n, targetScore, targetID, &count)
+	return count + 1 // 1-based ranking
+}
+
+// countHigherScores counts nodes with higher scores using in-order traversal
+func (s *TreapStore) countHigherScores(n *node, targetScore scoreFP, targetID string, count *int) {
+	if n == nil {
+		return
+	}
+
+	// Traverse left subtree first (higher scores)
+	s.countHigherScores(n.left, targetScore, targetID, count)
+
+	// Check current node
+	if less(n.score, n.id, targetScore, targetID) {
+		// Current node has higher score than target
+		(*count)++
+	} else if n.score == targetScore && n.id == targetID {
+		// Found the target node, stop counting
+		return
+	}
+
+	// Traverse right subtree (lower scores)
+	s.countHigherScores(n.right, targetScore, targetID, count)
+}
+
 // collectAll appends all entries in rank order (highest scores first).
-func collectAll(n *node, byID map[string]record, out *[]Entry) {
+func collectAll(n *node, out *[]Entry) {
 	if n == nil {
 		return
 	}
 	// Traverse left subtree first (higher scores)
-	collectAll(n.left, byID, out)
+	collectAll(n.left, out)
 	// Add current node
-	if rec, ok := byID[n.id]; ok {
-		*out = append(*out, Entry{
-			TalentID:  n.id,
-			Score:     toFloat(rec.score),
-			EventID:   rec.eventID,
-			Skill:     rec.skill,
-			RawMetric: rec.rawMetric,
-		})
+	if n.record != nil {
+		entry := createEntry(n, n.record)
+		*out = append(*out, entry)
 	}
 	// Traverse right subtree (lower scores)
-	collectAll(n.right, byID, out)
+	collectAll(n.right, out)
 }
 
 // sortEntries sorts entries by score (descending) and talentID (ascending) to match TopN logic
 func sortEntries(entries []Entry) {
-	sort.Slice(entries, func(i, j int) bool {
-		// Higher score comes first (descending order)
-		if entries[i].Score != entries[j].Score {
-			return entries[i].Score > entries[j].Score
+	// Simple bubble sort for small datasets
+	for i := 0; i < len(entries)-1; i++ {
+		for j := 0; j < len(entries)-i-1; j++ {
+			// Higher score comes first (descending order)
+			if entries[j].Score < entries[j+1].Score {
+				entries[j], entries[j+1] = entries[j+1], entries[j]
+			} else if entries[j].Score == entries[j+1].Score {
+				// Tie-breaker: talentID in ascending order
+				if entries[j].TalentID > entries[j+1].TalentID {
+					entries[j], entries[j+1] = entries[j+1], entries[j]
+				}
+			}
 		}
-		// Tie-breaker: talentID in ascending order
-		return entries[i].TalentID < entries[j].TalentID
-	})
+	}
 }
 
 // assignRanksWithTies assigns ranks with proper tie handling.

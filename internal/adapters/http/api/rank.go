@@ -24,7 +24,6 @@ func NewRankHandler(deps RankDependencies) *RankHandler {
 
 // HandleGetRank handles GET /rank/{talent_id} requests
 func (h *RankHandler) HandleGetRank(w http.ResponseWriter, r *http.Request) {
-	const op = "api.get_rank"
 	if r.Method != http.MethodGet {
 		http.NotFound(w, r)
 		return

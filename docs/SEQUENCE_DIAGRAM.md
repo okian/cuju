@@ -33,10 +33,17 @@ sequenceDiagram
         else New Event
             Deduper-->>Service: false (new)
             Service->>Queue: Enqueue Event
-            Queue-->>Service: Success
-            Service-->>HTTP API: 202 Accepted
-            HTTP API-->>Client: 202 Accepted<br/>{"status": "accepted", "duplicate": false}
-            Metrics->>Metrics: Record Event Processed
+            
+            alt Queue Full (Backpressure)
+                Queue-->>Service: Failed
+                Service-->>HTTP API: 429 Too Many Requests
+                HTTP API-->>Client: 429 Too Many Requests<br/>{"code": "backpressure", "message": "backpressure"}
+            else Queue Success
+                Queue-->>Service: Success
+                Service-->>HTTP API: 202 Accepted
+                HTTP API-->>Client: 202 Accepted<br/>{"status": "accepted", "duplicate": false}
+                Metrics->>Metrics: Record Event Processed
+            end
             
             Note over Queue,Worker: Asynchronous Background Processing
             
@@ -86,7 +93,7 @@ sequenceDiagram
     Note over Client,Metrics: Health and Monitoring
 
     Client->>HTTP API: GET /healthz
-    HTTP API-->>Client: 200 OK<br/>Service Health Status
+    HTTP API-->>Client: 200 OK<br/>Prometheus Metrics
 
     Client->>HTTP API: GET /stats
     HTTP API->>Service: GetStats()
@@ -116,7 +123,7 @@ sequenceDiagram
 - **Validation Errors**: 400 Bad Request for malformed requests
 - **Duplicate Events**: 200 OK with duplicate flag
 - **Not Found**: 404 for non-existent talents
-- **Service Unavailable**: 503 when queue is at capacity
+- **Backpressure**: 429 Too Many Requests when queue is at capacity
 
 ### 4. Performance Characteristics
 - **Event Submission**: O(1) - Hash map lookup + channel send

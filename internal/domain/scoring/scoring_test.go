@@ -13,14 +13,14 @@ import (
 func TestInMemoryScorer_Score(t *testing.T) {
 	Convey("Given a new in-memory scorer", t, func() {
 		scorer := scoring.NewInMemoryScorer(
-			scoring.WithSkillWeights(map[string]float64{
+			scoring.WithSkillWeightsFromConfig(map[string]float64{
 				"coding":    1.0,
 				"design":    0.8,
 				"writing":   0.9,
 				"marketing": 0.7,
 				"sales":     0.6,
 				"dribble":   0.85,
-			}),
+			}, 100),
 		)
 
 		Convey("When scoring a coding event", func() {
@@ -223,10 +223,10 @@ func TestInMemoryScorer_Options(t *testing.T) {
 	Convey("Given a scorer with custom options", t, func() {
 		Convey("When setting custom skill weights", func() {
 			scorer := scoring.NewInMemoryScorer(
-				scoring.WithSkillWeights(map[string]float64{
+				scoring.WithSkillWeightsFromConfig(map[string]float64{
 					"custom_skill":  2.0,
 					"another_skill": 1.5,
-				}),
+				}, 100),
 			)
 
 			Convey("Then custom weights should be applied", func() {
@@ -273,7 +273,7 @@ func TestInMemoryScorer_Options(t *testing.T) {
 		Convey("When setting custom default weight", func() {
 			customDefault := 0.8
 			scorer := scoring.NewInMemoryScorer(
-				scoring.WithDefaultWeight(customDefault),
+				scoring.WithSkillWeightsFromConfig(map[string]float64{}, customDefault),
 			)
 
 			Convey("Then custom default weight should be applied", func() {
@@ -294,9 +294,9 @@ func TestInMemoryScorer_Options(t *testing.T) {
 func TestInMemoryScorer_EdgeCases(t *testing.T) {
 	Convey("Given a scorer", t, func() {
 		scorer := scoring.NewInMemoryScorer(
-			scoring.WithSkillWeights(map[string]float64{
+			scoring.WithSkillWeightsFromConfig(map[string]float64{
 				"coding": 1.0,
-			}),
+			}, 100),
 		)
 
 		Convey("When scoring with empty talent ID", func() {
@@ -361,9 +361,9 @@ func TestInMemoryScorer_EdgeCases(t *testing.T) {
 func TestInMemoryScorer_Deterministic(t *testing.T) {
 	Convey("Given a scorer with fixed seed", t, func() {
 		scorer := scoring.NewInMemoryScorer(
-			scoring.WithSkillWeights(map[string]float64{
+			scoring.WithSkillWeightsFromConfig(map[string]float64{
 				"coding": 1.0,
-			}),
+			}, 100),
 		)
 
 		Convey("When scoring the same input multiple times", func() {
@@ -388,9 +388,9 @@ func TestInMemoryScorer_Deterministic(t *testing.T) {
 func TestInMemoryScorer_Performance(t *testing.T) {
 	Convey("Given a scorer", t, func() {
 		scorer := scoring.NewInMemoryScorer(
-			scoring.WithSkillWeights(map[string]float64{
+			scoring.WithSkillWeightsFromConfig(map[string]float64{
 				"coding": 1.0,
-			}),
+			}, 100),
 		)
 
 		Convey("When scoring multiple events rapidly", func() {

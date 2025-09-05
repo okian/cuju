@@ -11,35 +11,6 @@ import (
 // Option applies a configuration option to the InMemoryScorer
 type Option func(*InMemoryScorer)
 
-// WithSkillWeight sets a custom weight for a specific skill
-func WithSkillWeight(skill string, weight float64) Option {
-	return func(s *InMemoryScorer) {
-		if weight > 0 {
-			s.skillWeights[skill] = weight
-		}
-	}
-}
-
-// WithSkillWeights sets multiple custom weights for skills at once
-func WithSkillWeights(weights map[string]float64) Option {
-	return func(s *InMemoryScorer) {
-		for skill, weight := range weights {
-			if weight > 0 {
-				s.skillWeights[skill] = weight
-			}
-		}
-	}
-}
-
-// WithDefaultWeight sets the default weight for unknown skills
-func WithDefaultWeight(weight float64) Option {
-	return func(s *InMemoryScorer) {
-		if weight > 0 {
-			s.defaultWeight = weight
-		}
-	}
-}
-
 // WithLatencyRange sets the simulated latency range
 func WithLatencyRange(min, max time.Duration) Option {
 	return func(s *InMemoryScorer) {

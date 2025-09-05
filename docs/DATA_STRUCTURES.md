@@ -4,6 +4,8 @@
 
 This document provides a detailed analysis of the data structures and algorithms used in the CUJU leaderboard system, including time and space complexities, implementation details, and design rationale.
 
+**Note**: The CUJU system uses a **single treap architecture** (not sharded) for simplicity and consistency.
+
 ## 1. Treap-Based Leaderboard Store
 
 ### Data Structure: Treap (Tree + Heap)
@@ -181,13 +183,14 @@ func (q *InMemoryQueue) Dequeue(ctx context.Context) <-chan Event
 
 ## 3. Deduplication Cache
 
-### Data Structure: Hash Map + Linked List (LIFO)
+### Data Structure: Hash Map + Linked List (FIFO)
 
 ```go
 type inMemoryDeduper struct {
     mu       sync.RWMutex
     seen     map[string]*node  // id -> node pointer
-    head     *node             // head of linked list
+    head     *node             // head of linked list (oldest entry)
+    tail     *node             // tail of linked list (newest entry)
     maxSize  int               // maximum cache size
     size     atomic.Int64      // current size
     nodePool sync.Pool         // node reuse pool
@@ -207,20 +210,20 @@ func (d *inMemoryDeduper) SeenAndRecord(ctx context.Context, id string) bool
 **Algorithm**:
 1. Check if ID exists in hash map
 2. If exists, return true (duplicate)
-3. If not exists and cache full, evict LIFO
-4. Add new node to head of list
+3. If not exists and cache full, evict FIFO
+4. Add new node to tail of list
 5. Update hash map and size counter
 
-#### 2. Eviction (LIFO)
+#### 2. Eviction (FIFO)
 ```go
-func (d *inMemoryDeduper) evictLIFO()
+func (d *inMemoryDeduper) evictFIFO()
 ```
 
 **Time Complexity**: **O(1)** average case
 **Space Complexity**: **O(1)**
 
 **Algorithm**:
-1. Find tail of linked list
+1. Find head of linked list (oldest entry)
 2. Remove from hash map
 3. Update list pointers
 4. Return node to pool
@@ -284,7 +287,7 @@ func (p *WorkerPool) Start(ctx context.Context)
 2. Each worker processes events from shared queue
 3. Handle graceful shutdown
 
-## 5. Global Operations
+## 5. Single Treap Operations
 
 ### Top-N Query Implementation
 
@@ -297,7 +300,7 @@ func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
     defer s.mu.RUnlock()
     
     out := make([]Entry, 0, n)
-    collectTopN(s.root, n, s.byID, &out)
+    collectTopN(s.root, n, &out)
     
     // Assign ranks with proper tie handling
     assignRanksWithTies(out)
@@ -311,41 +314,41 @@ func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
 
 **Space Complexity**: **O(N)**
 
-### Global Rank Calculation
+### Rank Calculation
 
 **Problem**: Get rank for a specific talent
 **Solution**: In-order traversal to find rank
 
 ```go
 func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
-    // 1. Collect all entries from all shards
-    allEntries := make([]Entry, 0)
-    for i := range s.shards {
-        sh := &s.shards[i]
-        sh.mu.RLock()
-        shardEntries := make([]Entry, 0, len(sh.byID))
-        collectAll(sh.root, sh.byID, &shardEntries)
-        sh.mu.RUnlock()
-        allEntries = append(allEntries, shardEntries...)
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    
+    // Check if the talent exists and get its record
+    record, ok := s.byID[talentID]
+    if !ok {
+        return Entry{}, ErrNotFound
     }
     
-    // 2. Sort and assign global ranks
-    sortEntries(allEntries)
-    assignRanksWithTies(allEntries)
+    // Calculate rank efficiently using treap traversal
+    rank := s.calculateRank(s.root, record.score, talentID)
     
-    // 3. Find target talent
-    for _, entry := range allEntries {
-        if entry.TalentID == talentID {
-            return entry, nil
-        }
+    // Create entry with calculated rank
+    entry := Entry{
+        Rank:      rank,
+        TalentID:  talentID,
+        Score:     toFloat(record.score),
+        EventID:   record.eventID,
+        Skill:     record.skill,
+        RawMetric: record.rawMetric,
     }
     
-    return Entry{}, ErrNotFound
+    return entry, nil
 }
 ```
 
 **Time Complexity**: **O(log n)**
-**Space Complexity**: **O(N)** where N is total talents
+**Space Complexity**: **O(1)**
 
 ## 6. Performance Optimizations
 
@@ -383,8 +386,8 @@ func (s *TreapStore) startPeriodicSnapshots(ctx context.Context) {
 
 ### 3. Lock Granularity
 
-**Shard-Level Locks**: Each shard has its own RWMutex
-**Benefits**: Better concurrency, reduced lock contention
+**Single Treap Lock**: Single RWMutex for the entire treap
+**Benefits**: Simple implementation, consistent performance
 
 ### 4. Atomic Operations
 
@@ -519,6 +522,7 @@ We compromised on individual read/update performance (O(1) → O(log n)) to achi
 1. **Simplicity**: Single data structure is easier to understand and maintain
 2. **Consistency**: No cross-shard coordination needed
 3. **Performance**: Optimized for read-heavy workloads
+4. **Concurrency**: RWMutex provides safe concurrent access for the expected workload
 
 ### Why Score-Based Priorities?
 
@@ -533,10 +537,11 @@ We compromised on individual read/update performance (O(1) → O(log n)) to achi
 2. **Determinism**: Consistent ordering across runs
 3. **Performance**: Integer comparisons are faster
 
-### Why LIFO Eviction?
+### Why FIFO Eviction?
 
 1. **Simplicity**: Easy to implement and understand
-2. **Performance**: O(1) eviction from tail
+2. **Performance**: O(1) eviction from head
 3. **Memory Efficiency**: Reuses nodes from pool
+4. **Fairness**: Oldest entries are evicted first
 
 This comprehensive analysis shows that the CUJU system uses well-chosen data structures and algorithms that provide excellent performance characteristics while maintaining simplicity and reliability.

@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
-	"time"
 )
 
 // floatEqual compares two float64 values with a small tolerance for floating-point precision
@@ -335,409 +334,10 @@ func TestTreapStore_EdgeCases(t *testing.T) {
 	}
 }
 
-func TestTreapStore_PeriodicSnapshots(t *testing.T) {
-	ctx := context.Background()
-	// Create store with a very short snapshot interval for testing
-	store := NewTreapStore(ctx, WithSnapshotInterval(10*time.Millisecond))
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Add some data
-	_, _ = store.UpdateBest(ctx, "user1", 100.0)
-	_, _ = store.UpdateBest(ctx, "user2", 200.0)
-	_, _ = store.UpdateBest(ctx, "user3", 150.0)
-
-	// Wait for at least one snapshot cycle
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify that snapshots were created
-	snapshot := store.snapshot.Load()
-	if snapshot == nil {
-		t.Error("Expected snapshot to be created, but it was nil")
-		return
-	}
-
-	// Verify snapshot contents
-	if len(snapshot.RankByTalent) == 0 {
-		t.Error("Expected snapshot to contain rank data")
-	}
-	if len(snapshot.ScoreByTalent) == 0 {
-		t.Error("Expected snapshot to contain score data")
-	}
-	if len(snapshot.TopCache) == 0 {
-		t.Error("Expected snapshot to contain top cache")
-	}
-}
-
-// Comprehensive stress test benchmarks that measure real performance under pressure
-func BenchmarkTreapStore_StressTest_HeavyLoad(b *testing.B) {
-	ctx := context.Background()
-	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Pre-populate with substantial data
-	numTalents := 1_000_000
-	for i := 0; i < numTalents; i++ {
-		talentID := fmt.Sprintf("stress_talent_%d", i)
-		score := float64(i) + rand.Float64()*1000.0
-		_, _ = store.UpdateBest(ctx, talentID, score)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	// Measure all operations simultaneously under heavy load
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			// Distribute operations: 40% writes, 30% reads, 20% TopN, 10% Count
-			opType := i % 10
-
-			switch {
-			case opType < 4: // 40% - Heavy writes
-				talentID := fmt.Sprintf("stress_write_%d", i%numTalents)
-				score := float64(i) + rand.Float64()*1000.0
-				_, _ = store.UpdateBest(ctx, talentID, score)
-
-			case opType < 7: // 30% - Rank queries
-				talentID := fmt.Sprintf("stress_talent_%d", i%numTalents)
-				_, _ = store.Rank(ctx, talentID)
-
-			case opType < 9: // 20% - TopN queries (various sizes)
-				size := 10 + (i % 100) // 10 to 109
-				_, _ = store.TopN(ctx, size)
-
-			default: // 10% - Count operations
-				store.Count(ctx)
-			}
-			i++
-		}
-	})
-}
-
-func BenchmarkTreapStore_StressTest_WriteHeavy(b *testing.B) {
-	ctx := context.Background()
-	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Pre-populate with data
-	numTalents := 10_000_000
-	for i := 0; i < numTalents; i++ {
-		talentID := fmt.Sprintf("write_heavy_talent_%d", i)
-		score := float64(i) + rand.Float64()*1000.0
-		_, _ = store.UpdateBest(ctx, talentID, score)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	// 70% writes, 20% reads, 10% TopN during heavy write pressure
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			opType := i % 10
-
-			switch {
-			case opType < 7: // 70% - Heavy writes
-				talentID := fmt.Sprintf("write_heavy_update_%d", i%numTalents)
-				score := float64(i) + rand.Float64()*1000.0
-				_, _ = store.UpdateBest(ctx, talentID, score)
-
-			case opType < 9: // 20% - Rank queries
-				talentID := fmt.Sprintf("write_heavy_talent_%d", i%numTalents)
-				_, _ = store.Rank(ctx, talentID)
-
-			default: // 10% - TopN queries
-				size := 10 + (i % 50) // 10 to 59
-				_, _ = store.TopN(ctx, size)
-			}
-			i++
-		}
-	})
-}
-
-func BenchmarkTreapStore_StressTest_ReadHeavy(b *testing.B) {
-	ctx := context.Background()
-	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Pre-populate with substantial data
-	numTalents := 10_000_000
-	for i := 0; i < numTalents; i++ {
-		talentID := fmt.Sprintf("read_heavy_talent_%d", i)
-		score := float64(i) + rand.Float64()*1000.0
-		_, _ = store.UpdateBest(ctx, talentID, score)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	// 20% writes, 50% reads, 30% TopN during heavy read pressure
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			opType := i % 10
-
-			switch {
-			case opType < 2: // 20% - Writes
-				talentID := fmt.Sprintf("read_heavy_update_%d", i%numTalents)
-				score := float64(i) + rand.Float64()*1000.0
-				_, _ = store.UpdateBest(ctx, talentID, score)
-
-			case opType < 7: // 50% - Rank queries
-				talentID := fmt.Sprintf("read_heavy_talent_%d", i%numTalents)
-				_, _ = store.Rank(ctx, talentID)
-
-			default: // 30% - TopN queries (various sizes)
-				size := 10 + (i % 200) // 10 to 209
-				_, _ = store.TopN(ctx, size)
-			}
-			i++
-		}
-	})
-}
-
-func BenchmarkTreapStore_StressTest_TopNUnderPressure(b *testing.B) {
-	ctx := context.Background()
-	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Pre-populate with large dataset
-	numTalents := 10_000_000
-	for i := 0; i < numTalents; i++ {
-		talentID := fmt.Sprintf("topn_pressure_talent_%d", i)
-		score := float64(i) + rand.Float64()*1000.0
-		_, _ = store.UpdateBest(ctx, talentID, score)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	// Continuous TopN queries under heavy concurrent pressure
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			// Mix of TopN sizes to test different performance characteristics
-			var size int
-			switch i % 8 {
-			case 0:
-				size = 10 // Small TopN
-			case 1:
-				size = 100 // Medium TopN
-			case 2:
-				size = 1000 // Large TopN
-			case 3:
-				size = 5000 // Very large TopN
-			case 4:
-				size = 10000 // Huge TopN
-			case 5:
-				size = 100 + (i % 900) // Random medium
-			case 6:
-				size = 1000 + (i % 9000) // Random large
-			default:
-				size = 10000 + (i % 40000) // Random huge
-			}
-
-			// Ensure size doesn't exceed dataset
-			if size > numTalents {
-				size = numTalents
-			}
-
-			_, _ = store.TopN(ctx, size)
-			i++
-		}
-	})
-}
-
-func BenchmarkTreapStore_StressTest_MemoryPressure(b *testing.B) {
-	ctx := context.Background()
-	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Pre-populate with very large dataset
-	numTalents := 10_000_000
-	for i := 0; i < numTalents; i++ {
-		talentID := fmt.Sprintf("memory_pressure_talent_%d", i)
-		score := float64(i) + rand.Float64()*1000.0
-		_, _ = store.UpdateBest(ctx, talentID, score)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	// Mixed operations under memory pressure
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			opType := i % 12
-
-			switch {
-			case opType < 5: // 42% - Continuous writes (memory pressure)
-				talentID := fmt.Sprintf("memory_pressure_update_%d", i%numTalents)
-				score := float64(i) + rand.Float64()*1000.0
-				_, _ = store.UpdateBest(ctx, talentID, score)
-
-			case opType < 8: // 25% - Rank queries
-				talentID := fmt.Sprintf("memory_pressure_talent_%d", i%numTalents)
-				_, _ = store.Rank(ctx, talentID)
-
-			case opType < 11: // 25% - TopN queries
-				size := 100 + (i % 1000) // 100 to 1099
-				if size > numTalents {
-					size = numTalents
-				}
-				_, _ = store.TopN(ctx, size)
-
-			default: // 8% - Count operations
-				store.Count(ctx)
-			}
-			i++
-		}
-	})
-}
-
-func BenchmarkTreapStore_StressTest_SnapshotImpact(b *testing.B) {
-	ctx := context.Background()
-	// Fast snapshots to create pressure
-	store := NewTreapStore(ctx, WithSnapshotInterval(50*time.Millisecond))
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Pre-populate with data
-	numTalents := 10_000_000
-	for i := 0; i < numTalents; i++ {
-		talentID := fmt.Sprintf("snapshot_pressure_talent_%d", i)
-		score := float64(i) + rand.Float64()*1000.0
-		_, _ = store.UpdateBest(ctx, talentID, score)
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	// Heavy operations during frequent snapshots
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			opType := i % 10
-
-			switch {
-			case opType < 4: // 40% - Writes during snapshots
-				talentID := fmt.Sprintf("snapshot_pressure_update_%d", i%numTalents)
-				score := float64(i) + rand.Float64()*1000.0
-				_, _ = store.UpdateBest(ctx, talentID, score)
-
-			case opType < 7: // 30% - Reads during snapshots
-				talentID := fmt.Sprintf("snapshot_pressure_talent_%d", i%numTalents)
-				_, _ = store.Rank(ctx, talentID)
-
-			default: // 30% - TopN during snapshots
-				size := 10 + (i % 100) // 10 to 109
-				_, _ = store.TopN(ctx, size)
-			}
-			i++
-		}
-	})
-}
-
-func BenchmarkTreapStore_StressTest_ShardScaling(b *testing.B) {
-	ctx := context.Background()
-	// Test with different shard counts under pressure
-	shardCounts := []int{4, 8, 16, 32, 64}
-
-	for _, shardCount := range shardCounts {
-		b.Run(fmt.Sprintf("Shards_%d", shardCount), func(b *testing.B) {
-			store := NewTreapStore(ctx)
-			defer func() {
-				if err := store.Close(); err != nil {
-					// Log error but don't fail test
-					fmt.Printf("failed to close store: %v\n", err)
-				}
-			}()
-
-			// Pre-populate with data proportional to shard count
-			numTalents := shardCount * 1000
-			for i := 0; i < numTalents; i++ {
-				talentID := fmt.Sprintf("shard_scaling_%d_%d", shardCount, i)
-				score := float64(i) + rand.Float64()*1000.0
-				_, _ = store.UpdateBest(ctx, talentID, score)
-			}
-
-			b.ResetTimer()
-			b.ReportAllocs()
-
-			// Mixed operations to test shard performance
-			b.RunParallel(func(pb *testing.PB) {
-				i := 0
-				for pb.Next() {
-					opType := i % 10
-
-					switch {
-					case opType < 4: // 40% - Writes
-						talentID := fmt.Sprintf("shard_scaling_update_%d_%d", shardCount, i%numTalents)
-						score := float64(i) + rand.Float64()*1000.0
-						_, _ = store.UpdateBest(ctx, talentID, score)
-
-					case opType < 7: // 30% - Reads
-						talentID := fmt.Sprintf("shard_scaling_%d_%d", shardCount, i%numTalents)
-						_, _ = store.Rank(ctx, talentID)
-
-					default: // 30% - TopN
-						size := 100 + (i % 500) // 100 to 599
-						if size > numTalents {
-							size = numTalents
-						}
-						_, _ = store.TopN(ctx, size)
-					}
-					i++
-				}
-			})
-		})
-	}
-}
-
 // TestMultipleScoresPerTalent demonstrates that each talent gets multiple random scores
 func TestMultipleScoresPerTalent(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	// Test with a small number of talents to verify the pattern
 	talentCount := 10
@@ -828,12 +428,6 @@ func TestMultipleScoresPerTalent(t *testing.T) {
 func TestTreapStore_ScoreOverrideEdgeCases(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	// Test exact same score (should not update)
 	updated, err := store.UpdateBest(ctx, "talent1", 100.0)
@@ -925,12 +519,6 @@ func TestTreapStore_ScoreOverrideEdgeCases(t *testing.T) {
 func TestTreapStore_RankCorrectnessUnderStress(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	// Insert many talents with random scores
 	numTalents := 1000
@@ -1001,12 +589,6 @@ func TestTreapStore_RankCorrectnessUnderStress(t *testing.T) {
 func TestTreapStore_ConcurrentScoreUpdates(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	numGoroutines := 20
 	updatesPerGoroutine := 50
@@ -1068,177 +650,9 @@ func TestTreapStore_ConcurrentScoreUpdates(t *testing.T) {
 	}
 }
 
-func TestTreapStore_SnapshotConsistency(t *testing.T) {
-	ctx := context.Background()
-	// Use very short snapshot interval for testing and single shard to ensure all data is in one place
-	store := NewTreapStore(ctx, WithSnapshotInterval(5*time.Millisecond))
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Insert initial data
-	talents := []struct {
-		id    string
-		score float64
-	}{
-		{"talent1", 100.0},
-		{"talent2", 200.0},
-		{"talent3", 150.0},
-		{"talent4", 300.0},
-		{"talent5", 250.0},
-	}
-
-	for _, talent := range talents {
-		updated, err := store.UpdateBest(ctx, talent.id, talent.score)
-		if err != nil {
-			t.Fatalf("failed to insert %s: %v", talent.id, err)
-		}
-		if !updated {
-			t.Errorf("expected update to succeed for %s", talent.id)
-		}
-	}
-
-	// Wait for snapshot to be created
-	time.Sleep(20 * time.Millisecond)
-
-	// Verify snapshot exists and is consistent
-	snapshot := store.snapshot.Load()
-	if snapshot == nil {
-		t.Fatal("expected snapshot to exist")
-	}
-
-	// Verify snapshot contains all talents
-	if len(snapshot.RankByTalent) != 5 {
-		t.Errorf("expected snapshot to contain 5 talents, got %d", len(snapshot.RankByTalent))
-	}
-
-	if len(snapshot.ScoreByTalent) != 5 {
-		t.Errorf("expected snapshot to contain 5 scores, got %d", len(snapshot.ScoreByTalent))
-	}
-
-	// Verify snapshot data matches live data
-	for _, talent := range talents {
-		// Check live data
-		liveEntry, err := store.Rank(ctx, talent.id)
-		if err != nil {
-			t.Fatalf("failed to get live rank for %s: %v", talent.id, err)
-		}
-
-		// Check snapshot data
-		snapshotRank, exists := snapshot.RankByTalent[talent.id]
-		if !exists {
-			t.Errorf("talent %s missing from snapshot ranks", talent.id)
-			continue
-		}
-
-		snapshotScore, exists := snapshot.ScoreByTalent[talent.id]
-		if !exists {
-			t.Errorf("talent %s missing from snapshot scores", talent.id)
-			continue
-		}
-
-		// Verify consistency
-		if snapshotRank != liveEntry.Rank {
-			t.Errorf("talent %s rank mismatch: snapshot=%d, live=%d",
-				talent.id, snapshotRank, liveEntry.Rank)
-		}
-
-		if snapshotScore != liveEntry.Score {
-			t.Errorf("talent %s score mismatch: snapshot=%f, live=%f",
-				talent.id, snapshotScore, liveEntry.Score)
-		}
-	}
-
-	// Verify TopCache is properly ordered
-	if len(snapshot.TopCache) == 0 {
-		t.Error("expected TopCache to contain entries")
-	}
-
-	for i := 1; i < len(snapshot.TopCache); i++ {
-		if snapshot.TopCache[i].Score > snapshot.TopCache[i-1].Score {
-			t.Errorf("TopCache not in descending order: %f > %f",
-				snapshot.TopCache[i].Score, snapshot.TopCache[i-1].Score)
-		}
-	}
-}
-
-func TestTreapStore_SnapshotDuringUpdates(t *testing.T) {
-	ctx := context.Background()
-	// Use very short snapshot interval to catch snapshot during updates
-	store := NewTreapStore(ctx, WithSnapshotInterval(1*time.Millisecond))
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
-
-	// Start continuous updates in background
-	stopUpdates := make(chan struct{})
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(100 * time.Microsecond)
-		defer ticker.Stop()
-
-		counter := 0
-		for {
-			select {
-			case <-stopUpdates:
-				return
-			case <-ticker.C:
-				talentID := fmt.Sprintf("updating_talent_%d", counter%10)
-				score := float64(100 + counter)
-				_, _ = store.UpdateBest(ctx, talentID, score)
-				counter++
-			}
-		}
-	}()
-
-	// Let updates run for a while
-	time.Sleep(10 * time.Millisecond)
-
-	// Stop updates
-	close(stopUpdates)
-	wg.Wait()
-
-	// Verify store is still consistent after snapshot during updates
-	if count := store.Count(ctx); count == 0 {
-		t.Error("expected store to contain talents after snapshot during updates")
-	}
-
-	// Verify we can still query ranks
-	entries, err := store.TopN(ctx, 10)
-	if err != nil {
-		t.Fatalf("TopN failed after snapshot during updates: %v", err)
-	}
-
-	if len(entries) == 0 {
-		t.Error("expected TopN to return entries after snapshot during updates")
-	}
-
-	// Verify ranks are still sequential
-	for i, entry := range entries {
-		if entry.Rank != i+1 {
-			t.Errorf("entry %d: expected rank %d, got %d", i, i+1, entry.Rank)
-		}
-	}
-}
-
 func TestTreapStore_ExtremeScoreValues(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	// Test various score values that can be reasonably represented
 	extremeScores := []float64{
@@ -1298,12 +712,6 @@ func TestTreapStore_ExtremeScoreValues(t *testing.T) {
 func TestTreapStore_EmptyAndSingleElement(t *testing.T) {
 	ctx := context.Background()
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	// Test empty store operations
 	if count := store.Count(ctx); count != 0 {
@@ -1373,12 +781,6 @@ func TestTreapStore_ShardDistribution(t *testing.T) {
 	for _, shardCount := range shardCounts {
 		t.Run(fmt.Sprintf("Shards_%d", shardCount), func(t *testing.T) {
 			store := NewTreapStore(ctx)
-			defer func() {
-				if err := store.Close(); err != nil {
-					// Log error but don't fail test
-					fmt.Printf("failed to close store: %v\n", err)
-				}
-			}()
 
 			// Insert talents that should hash to different shards
 			numTalents := shardCount * 10
@@ -1431,12 +833,6 @@ func TestTreapStore_ShardDistribution(t *testing.T) {
 func TestTreapStore_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	store := NewTreapStore(ctx)
-	defer func() {
-		if err := store.Close(); err != nil {
-			// Log error but don't fail test
-			fmt.Printf("failed to close store: %v\n", err)
-		}
-	}()
 
 	// Insert some data
 	updated, err := store.UpdateBest(ctx, "talent1", 100.0)
@@ -1450,7 +846,7 @@ func TestTreapStore_ContextCancellation(t *testing.T) {
 	// Cancel context
 	cancel()
 
-	// Operations should still work (context is only used for snapshot goroutine)
+	// Operations should still work
 	updated, err = store.UpdateBest(ctx, "talent2", 200.0)
 	if err != nil {
 		t.Fatalf("UpdateBest failed after context cancellation: %v", err)
@@ -1473,48 +869,5 @@ func TestTreapStore_ContextCancellation(t *testing.T) {
 	}
 	if len(entries) != 2 {
 		t.Errorf("expected 2 entries, got %d", len(entries))
-	}
-}
-
-func TestTreapStore_CloseBehavior(t *testing.T) {
-	ctx := context.Background()
-	store := NewTreapStore(ctx)
-
-	// Insert some data
-	updated, err := store.UpdateBest(ctx, "talent1", 100.0)
-	if err != nil {
-		t.Fatalf("failed to insert talent: %v", err)
-	}
-	if !updated {
-		t.Error("expected update to succeed")
-	}
-
-	// Close the store
-	err = store.Close()
-	if err != nil {
-		t.Errorf("Close returned error: %v", err)
-	}
-
-	// Operations should still work after close (snapshot goroutine is stopped)
-	updated, err = store.UpdateBest(ctx, "talent2", 200.0)
-	if err != nil {
-		t.Fatalf("UpdateBest failed after close: %v", err)
-	}
-	if !updated {
-		t.Error("expected update to succeed after close")
-	}
-
-	entry, err := store.Rank(ctx, "talent1")
-	if err != nil {
-		t.Fatalf("Rank failed after close: %v", err)
-	}
-	if entry.Score != 100.0 {
-		t.Errorf("expected score 100.0, got %f", entry.Score)
-	}
-
-	// Multiple closes should not panic
-	err = store.Close()
-	if err != nil {
-		t.Errorf("second Close returned error: %v", err)
 	}
 }

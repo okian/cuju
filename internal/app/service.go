@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"runtime"
 	"sync"
@@ -231,7 +232,12 @@ func (s *Service) Stop() {
 	}
 
 	// Signal cleanup loop to stop
-	close(s.stopCh)
+	select {
+	case <-s.stopCh:
+		// Channel already closed
+	default:
+		close(s.stopCh)
+	}
 
 	s.started = false
 	s.logger.Info(context.Background(), "leaderboard service stopped")
@@ -275,8 +281,24 @@ func (s *Service) Enqueue(ctx context.Context, e any) bool {
 		)
 
 		if talentID != "" && skill != "" {
+			// Try to get EventID from the original event, or generate a deterministic one
+			eventID := v.FieldByName("EventID").String()
+			if eventID == "" {
+				// Generate a deterministic event ID based on content for deduplication
+				eventID = fmt.Sprintf("%s_%s_%f", talentID, skill, rawMetric)
+			}
+
+			// Check for duplicates before enqueueing
+			if s.SeenAndRecord(ctx, eventID) {
+				s.logger.Debug(ctx, "duplicate event detected, skipping",
+					logger.String("eventID", eventID),
+					logger.String("talentID", talentID),
+				)
+				return true // Return true to indicate "processed" (as duplicate)
+			}
+
 			workerEvent := model.Event{
-				EventID:   "unknown",
+				EventID:   eventID,
 				TalentID:  talentID,
 				RawMetric: rawMetric,
 				Skill:     skill,

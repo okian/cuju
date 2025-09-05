@@ -13,10 +13,10 @@ log_level: "info"
 # HTTP listen address (e.g., ":9080", "127.0.0.1:9080")
 addr: ":9080"
 
-# In-memory event queue capacity (default: 100000)
-queue_size: 100000
+# In-memory event queue capacity (default: 200000)
+queue_size: 200000
 
-# Number of scoring workers. If omitted, defaults to 10 x CPU cores.
+# Number of scoring workers. If omitted, defaults to 20 x CPU cores.
 # Uncomment to set explicitly.
 # worker_count: 16
 

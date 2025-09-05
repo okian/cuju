@@ -94,15 +94,40 @@ paths:
                 $ref: '#/components/schemas/Error'
   /healthz:
     get:
-      summary: Health check
+      summary: Prometheus metrics endpoint
       operationId: healthz
       responses:
         '200':
-          description: Service healthy
+          description: Prometheus metrics in OpenMetrics format
+          content:
+            application/openmetrics-text:
+              schema:
+                type: string
+                description: Prometheus metrics in OpenMetrics format
+  /stats:
+    get:
+      summary: Service statistics
+      operationId: getStats
+      responses:
+        '200':
+          description: Service statistics
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Health'
+                type: object
+                description: Service statistics and metrics
+  /dashboard:
+    get:
+      summary: Web monitoring dashboard
+      operationId: getDashboard
+      responses:
+        '200':
+          description: HTML dashboard
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML dashboard with real-time metrics
 components:
   schemas:
     Event:

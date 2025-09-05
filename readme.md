@@ -82,7 +82,7 @@ curl "http://localhost:9080/rank/t1"
 **Key Design Decisions:**
 - **Treap Data Structure** - Chosen over simple maps for optimal Top-N query performance
 - **Single Treap Architecture** - Enables concurrent updates while maintaining global ordering
-- **Fixed-Point Arithmetic** - Eliminates floating-point precision issues
+- **Fixed-Point Arithmetic** - Eliminates floating-point precision issues (12 decimal places)
 - **Read-Heavy Optimization** - Prioritizes leaderboard queries over individual updates
 
 ## 🧪 Performance Testing & Validation
@@ -215,7 +215,7 @@ go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
 * **Repository Layer** - Single treap store for leaderboard data
 * **Message Queue** - Asynchronous event processing
 * **Worker Pool** - Concurrent event scoring
-* **Deduplication Cache** - Idempotent event processing
+* **Deduplication Cache** - Idempotent event processing with LIFO eviction
 * **Scoring Engine** - ML latency simulation (80-150ms)
 * **Metrics System** - Comprehensive Prometheus monitoring
 
@@ -257,7 +257,7 @@ Create `config.yaml` based on `config.example.yaml`:
 log_level: "info"
 addr: ":9080"
 queue_size: 100000
-worker_count: 16
+# worker_count: 16  # Defaults to 20x CPU cores
 dedupe_size: 500000
 scoring_latency_min_ms: 80
 scoring_latency_max_ms: 150
@@ -284,9 +284,7 @@ docker-compose --profile monitoring up -d
 ```
 
 ### Monitoring
-- **Metrics**: `http://localhost:9080/metrics` (Prometheus format)
+- **Metrics**: `http://localhost:9080/healthz` (Prometheus metrics)
 - **Dashboard**: `http://localhost:9080/dashboard` (Web UI)
 - **Health**: `http://localhost:9080/healthz`
 - **Stats**: `http://localhost:9080/stats`
-- **Prometheus**: `http://localhost:9090` (if monitoring profile enabled)
-- **Grafana**: `http://localhost:3000` (if monitoring profile enabled)

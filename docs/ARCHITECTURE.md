@@ -19,7 +19,7 @@ CUJU is a high-performance, in-memory leaderboard system designed for real-time 
 ### Key Features
 - **Idempotent Event Processing**: Duplicate events are detected and ignored
 - **Asynchronous Scoring**: Events are processed in background workers with simulated ML latency
-- **High-Performance Storage**: Optimized treap-based storage for fast operations
+- **High-Performance Storage**: Single treap-based storage for fast operations
 - **Real-time Metrics**: Comprehensive Prometheus metrics for monitoring
 - **High Performance**: Optimized for sub-40ms read latencies
 
@@ -71,6 +71,7 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 **Data Structure**: Treap (Tree + Heap)
 - **Purpose**: Maintains sorted leaderboard with O(log n) operations
 - **Concurrency**: Single treap with RWMutex for thread-safe access
+- **Architecture**: Single treap (not sharded) for simplicity and consistency
 
 **Time Complexities**:
 - `UpdateBest()`: **O(log n)** - Insert/update in treap
@@ -102,9 +103,9 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 
 ### 3. Deduplication Cache
 
-**Data Structure**: Hash Map + Linked List (LIFO)
+**Data Structure**: Hash Map + Linked List (FIFO)
 - **Purpose**: Idempotent event processing
-- **Eviction**: LIFO when capacity exceeded
+- **Eviction**: FIFO when capacity exceeded
 
 **Time Complexities**:
 - `SeenAndRecord()`: **O(1)** - Hash map lookup + list insertion
@@ -163,14 +164,15 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 ### 3. Repository Layer (`internal/adapters/repository/`)
 
 **Implementation**: TreapStore
-- **Concurrency**: RWMutex for thread-safe access
+- **Concurrency**: Single treap with RWMutex for thread-safe access
 - **Snapshots**: Periodic snapshot generation for fast reads
 
 **Key Features**:
-- Fixed-point score representation for precision
+- Fixed-point score representation for precision (12 decimal places)
 - Deterministic ordering (score DESC, talent_id ASC)
 - Efficient rank calculation with in-order traversal
-- Memory-efficient node reuse
+- Memory-efficient node reuse with sync.Pool
+- Score-based treap priorities for optimal balance
 
 ### 4. Message Queue (`internal/adapters/mq/`)
 
@@ -180,7 +182,7 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 - Channel-based dequeue for workers
 
 **Worker Pool**:
-- Configurable worker count
+- Configurable worker count (default: 20x CPU cores)
 - Graceful shutdown handling
 - Error tracking and metrics
 
@@ -195,7 +197,7 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 
 **Implementation**: InMemoryDeduper
 - **Storage**: Hash map + linked list
-- **Eviction**: LIFO when capacity exceeded
+- **Eviction**: FIFO when capacity exceeded
 - **Thread Safety**: RWMutex protection
 
 ### 7. Configuration (`internal/config/`)
@@ -291,7 +293,7 @@ sequenceDiagram
 - `202 Accepted`: Event accepted for processing
 - `200 OK`: Duplicate event (already processed)
 - `400 Bad Request`: Invalid request format
-- `503 Service Unavailable`: Queue at capacity
+- `429 Too Many Requests`: Queue at capacity (backpressure)
 
 **Time Complexity**: **O(1)** - Hash map lookup + channel send
 
@@ -351,6 +353,13 @@ sequenceDiagram
 **Purpose**: Web-based monitoring dashboard
 
 **Response**: HTML dashboard with real-time metrics
+
+### 7. GET /healthz
+**Purpose**: Prometheus metrics endpoint
+
+**Response**: Prometheus metrics in OpenMetrics format
+
+**Time Complexity**: **O(1)**
 
 ## Design Trade-offs
 
@@ -478,8 +487,8 @@ Create `config.yaml`:
 ```yaml
 log_level: "info"
 addr: ":9080"
-queue_size: 100000
-worker_count: 16
+queue_size: 200000
+# worker_count: 16  # Defaults to 20x CPU cores
 dedupe_size: 500000
 max_leaderboard_limit: 100
 scoring_latency_min_ms: 80
@@ -523,7 +532,7 @@ curl "http://localhost:9080/healthz"
 
 ### 4. Monitoring
 
-**Metrics Endpoint**: `http://localhost:9080/metrics`
+**Metrics Endpoint**: `http://localhost:9080/healthz` (with Accept: application/openmetrics-text)
 **Dashboard**: `http://localhost:9080/dashboard`
 **Stats**: `http://localhost:9080/stats`
 

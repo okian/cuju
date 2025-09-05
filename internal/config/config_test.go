@@ -15,7 +15,7 @@ func TestConfig_New(t *testing.T) {
 		Convey("Then it should have sensible defaults", func() {
 			So(cfg.Addr, ShouldEqual, ":9080")
 			So(cfg.EventQueueSize, ShouldEqual, 200_000)
-			So(cfg.WorkerCount, ShouldEqual, runtime.NumCPU()*10)
+			So(cfg.WorkerCount, ShouldEqual, runtime.NumCPU()*20)
 			So(cfg.DedupeSize, ShouldEqual, 500_000)
 			So(cfg.ScoringLatencyMinMS, ShouldEqual, 80)
 			So(cfg.ScoringLatencyMaxMS, ShouldEqual, 150)

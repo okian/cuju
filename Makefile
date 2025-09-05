@@ -16,6 +16,16 @@ run: build
 	@echo "Starting CUJU leaderboard service..."
 	@echo "Dashboard: http://localhost:9080/dashboard"
 	@echo "Press Ctrl+C to stop"
+	@(sleep 2 && \
+		if command -v open >/dev/null 2>&1; then \
+			open http://localhost:9080/dashboard; \
+		elif command -v xdg-open >/dev/null 2>&1; then \
+			xdg-open http://localhost:9080/dashboard; \
+		elif command -v start >/dev/null 2>&1; then \
+			start http://localhost:9080/dashboard; \
+		else \
+			echo "Please open http://localhost:9080/dashboard in your browser"; \
+		fi) &
 	@./$(BINARY_PATH)
 
 run-dev:

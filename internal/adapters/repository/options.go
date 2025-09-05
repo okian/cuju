@@ -6,20 +6,11 @@ import "time"
 // Option applies a configuration option to the TreapStore.
 type Option func(*TreapStore)
 
-// WithSnapshotInterval sets the interval for publishing snapshots.
-func WithSnapshotInterval(interval time.Duration) Option {
+// WithMetricsUpdateInterval sets the interval for background metrics updates.
+func WithMetricsUpdateInterval(interval time.Duration) Option {
 	return func(s *TreapStore) {
 		if interval > 0 {
-			s.snapshotInterval = interval
-		}
-	}
-}
-
-// WithTopCacheSize sets the size of the top-K cache.
-func WithTopCacheSize(size int) Option {
-	return func(s *TreapStore) {
-		if size > 0 {
-			s.topCacheSize = size
+			s.metricsUpdateInterval = interval
 		}
 	}
 }

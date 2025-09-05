@@ -34,13 +34,14 @@ func (n *node) reset() {
 	n.next = nil
 }
 
-// inMemoryDeduper implements Deduper using an in-memory linked list with LIFO eviction.
-// For bounded mode (maxSize > 0): uses linked list with LIFO eviction and sync.Pool for nodes
+// inMemoryDeduper implements Deduper using an in-memory linked list with FIFO eviction.
+// For bounded mode (maxSize > 0): uses linked list with FIFO eviction and sync.Pool for nodes
 // For unbounded mode (maxSize <= 0): uses simple map (no eviction, no size limit)
 type inMemoryDeduper struct {
 	mu       sync.RWMutex
 	seen     map[string]*node // id -> node pointer for bounded mode, nil for unbounded
-	head     *node            // head of linked list (most recently added)
+	head     *node            // head of linked list (oldest entry)
+	tail     *node            // tail of linked list (newest entry)
 	maxSize  int              // maximum number of IDs to keep in memory (0 or negative = UNBOUNDED)
 	size     atomic.Int64     // current number of entries (atomic)
 	nodePool sync.Pool        // pool for reusing node objects
@@ -86,19 +87,27 @@ func (d *inMemoryDeduper) SeenAndRecord(ctx context.Context, id string) bool {
 	}
 
 	if d.maxSize > 0 {
-		// BOUNDED MODE: Use linked list with LIFO eviction
+		// BOUNDED MODE: Use linked list with FIFO eviction
 		// Check if we need to evict before adding the new entry
 		if len(d.seen) >= d.maxSize {
-			d.evictLIFO()
+			d.evictFIFO()
 		}
 
 		// Create new node from pool
 		n := d.nodePool.Get().(*node)
 		n.id = id
-		n.next = d.head
+		n.next = nil
 
-		// Update head and map
-		d.head = n
+		// Add to tail (FIFO: newest at tail)
+		if d.tail == nil {
+			// First node
+			d.head = n
+			d.tail = n
+		} else {
+			// Add to tail
+			d.tail.next = n
+			d.tail = n
+		}
 		d.seen[id] = n
 	} else {
 		// UNBOUNDED MODE: Just use map
@@ -123,8 +132,23 @@ func (d *inMemoryDeduper) Unrecord(ctx context.Context, id string) {
 			if d.head == node {
 				// Node is at head
 				d.head = node.next
+				if d.head == nil {
+					// Was the last node
+					d.tail = nil
+				}
+			} else if d.tail == node {
+				// Node is at tail
+				// Find the previous node
+				current := d.head
+				for current != nil && current.next != node {
+					current = current.next
+				}
+				if current != nil {
+					current.next = nil
+					d.tail = current
+				}
 			} else {
-				// Find and remove node from middle/tail
+				// Node is in the middle
 				current := d.head
 				for current != nil && current.next != node {
 					current = current.next
@@ -149,41 +173,29 @@ func (d *inMemoryDeduper) Unrecord(ctx context.Context, id string) {
 	}
 }
 
-// evictLIFO removes the least recently added entry (tail of list) from the map.
+// evictFIFO removes the oldest entry (head of list) from the map.
 // Must be called with d.mu.Lock() held.
-func (d *inMemoryDeduper) evictLIFO() {
+func (d *inMemoryDeduper) evictFIFO() {
 	if len(d.seen) == 0 || d.head == nil {
 		return
 	}
 
-	// Find the second-to-last node
-	var prev *node
-	current := d.head
+	// Remove the head (oldest entry)
+	oldHead := d.head
+	delete(d.seen, oldHead.id)
 
-	// If there's only one node, remove it
-	if current.next == nil {
-		delete(d.seen, current.id)
-		current.reset()
-		d.nodePool.Put(current)
-		d.head = nil
-		d.size.Add(-1)
-		return
+	// Update head pointer
+	d.head = oldHead.next
+
+	// If this was the last node, also clear tail
+	if d.head == nil {
+		d.tail = nil
 	}
 
-	// Find the second-to-last node
-	for current.next != nil {
-		prev = current
-		current = current.next
-	}
-
-	// Remove the last node (tail)
-	if prev != nil {
-		prev.next = nil
-		delete(d.seen, current.id)
-		current.reset()
-		d.nodePool.Put(current)
-		d.size.Add(-1)
-	}
+	// Return node to pool
+	oldHead.reset()
+	d.nodePool.Put(oldHead)
+	d.size.Add(-1)
 }
 
 // Size returns the current number of entries in the deduper.
