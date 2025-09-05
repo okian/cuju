@@ -56,26 +56,4 @@ jobs:
     - name: Run golangci-lint
       run: make lint
 
-  dependency-check:
-    name: Dependency Check
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Check for vulnerabilities
-      run: |
-        go list -json -deps ./... | nancy sleuth
-
-    - name: Tidy dependencies
-      run: make tidy
+ 

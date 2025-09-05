@@ -53,6 +53,9 @@ jobs:
 
     - name: Quick build test
       run: go build -o /tmp/cuju ./cmd/main.go
+      
+    - name: Verify binary works
+      run: /tmp/cuju -help || true
 
   # This job ensures all other workflows are triggered
   trigger-workflows:

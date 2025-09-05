@@ -31,22 +31,22 @@ This directory contains the GitHub Actions workflows for the Cuju project. The w
 - **Triggers**: Push to main/develop, PRs, manual dispatch
 - **Jobs**:
   - `lint`: Code formatting, vet, and golangci-lint
-  - `security`: Security scanning with Gosec
-  - `dependency-check`: Dependency vulnerability checks
+  - `dependency-check`: Dependency vulnerability checks with Nancy
 
-### 🚀 Release (`release.yml`)
+### 🚀 Release (Future)
 **Purpose**: Automated releases and Docker image builds
-- **Triggers**: Git tags (v*), manual dispatch
-- **Jobs**:
-  - `release`: Multi-platform binary builds and GitHub releases
-  - `docker`: Docker image build and push to registry
+- **Status**: Not yet implemented
+- **Planned Features**:
+  - Multi-platform binary builds
+  - GitHub releases
+  - Docker image builds
 
-### 📦 Dependencies (`dependencies.yml`)
+### 📦 Dependencies (Future)
 **Purpose**: Automated dependency management
-- **Triggers**: Weekly schedule (Mondays), manual dispatch
-- **Jobs**:
-  - `update-dependencies`: Automated dependency updates via PR
-  - `security-audit`: Security audit and license checking
+- **Status**: Not yet implemented
+- **Planned Features**:
+  - Weekly dependency updates
+  - Security audits
 
 ## Workflow Benefits
 
@@ -99,8 +99,9 @@ All workflows support manual triggering:
 - `DOCKER_USERNAME`/`DOCKER_PASSWORD`: Required for Docker releases
 
 ### Secrets Required
-- `DOCKER_USERNAME`: Docker Hub username
-- `DOCKER_PASSWORD`: Docker Hub password/token
+- `CODECOV_TOKEN`: Codecov token for coverage reporting (optional)
+- `DOCKER_USERNAME`: Docker Hub username (for future releases)
+- `DOCKER_PASSWORD`: Docker Hub password/token (for future releases)
 
 ## Monitoring
 

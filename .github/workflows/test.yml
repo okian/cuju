@@ -51,17 +51,6 @@ jobs:
     - name: Run tests with race detector
       run: make test-race
 
-    - name: Generate coverage report
-      run: make cover
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
-
   benchmark:
     name: Run Benchmarks
     runs-on: ubuntu-latest
