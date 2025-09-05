@@ -6,15 +6,6 @@ import "time"
 // Option applies a configuration option to the TreapStore.
 type Option func(*TreapStore)
 
-// WithShardCount sets the number of shards for the leaderboard store.
-func WithShardCount(count int) Option {
-	return func(s *TreapStore) {
-		if count > 0 {
-			s.shardCount = count
-		}
-	}
-}
-
 // WithSnapshotInterval sets the interval for publishing snapshots.
 func WithSnapshotInterval(interval time.Duration) Option {
 	return func(s *TreapStore) {

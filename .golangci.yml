@@ -1,3 +1,5 @@
+version: 2
+
 run:
   timeout: 5m
   go: "1.24"
@@ -17,9 +19,6 @@ run:
 linters:
   enable:
     # Code formatting and imports
-    - gofmt
-    - goimports
-    - gci
     
     # Go vet and related
     - govet
@@ -36,7 +35,6 @@ linters:
     - unused
     - ineffassign
     - deadcode
-    - typecheck
     
     # Code complexity and maintainability
     - gocyclo
@@ -105,9 +103,7 @@ linters-settings:
       mnd:
         checks: argument,case,condition,operation,return,assign
         ignored-numbers: 0,1,2,3,4,5,10,100,1000
-        ignored-functions: strings.SplitN,strings.SplitAfterN,bytes.SplitN,bytes.SplitAfterN
-        ignored-functions: strings.Replace,bytes.Replace,strings.ReplaceAll,bytes.ReplaceAll
-        ignored-functions: strings.TrimPrefix,strings.TrimSuffix,bytes.TrimPrefix,bytes.TrimSuffix
+        ignored-functions: strings.SplitN,strings.SplitAfterN,bytes.SplitN,bytes.SplitAfterN,strings.Replace,bytes.Replace,strings.ReplaceAll,bytes.ReplaceAll,strings.TrimPrefix,strings.TrimSuffix,bytes.TrimPrefix,bytes.TrimSuffix
   
   dupl:
     threshold: 100
@@ -252,7 +248,7 @@ issues:
         - all
     
     # Exclude specific linters for specific patterns
-    - text: "Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*printf?|os\.(Un)?Setenv). is not checked"
+    - text: "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
       linters:
         - errcheck
     

@@ -17,10 +17,8 @@ import (
 
 // Mock implementations for testing
 type mockQueue struct {
-	events     []queue.Event
 	eventChan  chan queue.Event
 	closeError error
-	mu         sync.RWMutex
 }
 
 func newMockQueue() *mockQueue {
@@ -126,7 +124,7 @@ func (mu *mockUpdater) getUpdate(talentID string) (float64, bool) {
 func TestInMemoryWorker(t *testing.T) {
 	Convey("Given a new InMemoryWorker", t, func() {
 		// Initialize logging for tests
-		logging.Init()
+		_ = logging.Init()
 
 		queue := newMockQueue()
 		scorer := newMockScorer()
@@ -274,7 +272,7 @@ func TestInMemoryWorker(t *testing.T) {
 func TestWorkerPool(t *testing.T) {
 	Convey("Given a new WorkerPool", t, func() {
 		// Initialize logging for tests
-		logging.Init()
+		_ = logging.Init()
 
 		queue := newMockQueue()
 		scorer := newMockScorer()
@@ -391,7 +389,7 @@ func TestWorkerOptions(t *testing.T) {
 func TestWorkerConcurrency(t *testing.T) {
 	Convey("Given a worker pool with multiple workers", t, func() {
 		// Initialize logging for tests
-		logging.Init()
+		_ = logging.Init()
 
 		queue := newMockQueue()
 		scorer := newMockScorer()
@@ -457,7 +455,7 @@ func TestWorkerConcurrency(t *testing.T) {
 func TestWorkerErrorHandling(t *testing.T) {
 	Convey("Given a worker with error conditions", t, func() {
 		// Initialize logging for tests
-		logging.Init()
+		_ = logging.Init()
 
 		queue := newMockQueue()
 		scorer := newMockScorer()
@@ -523,7 +521,7 @@ func TestWorkerErrorHandling(t *testing.T) {
 
 		Convey("When queue channel is closed", func() {
 			// Close the queue
-			queue.Close()
+			_ = queue.Close()
 
 			// Give worker time to detect closure
 			time.Sleep(50 * time.Millisecond)

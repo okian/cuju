@@ -32,17 +32,17 @@ func (h *RankHandler) HandleGetRank(w http.ResponseWriter, r *http.Request) {
 	// Extract path parameter after /rank/
 	path := strings.TrimPrefix(r.URL.Path, "/rank/")
 	if path == "" || strings.Contains(path, "/") {
-		writeError(w, http.StatusBadRequest, "bad_request", NewKind(op, ErrBadRequest))
+		writeError(w, http.StatusBadRequest, "bad_request", ErrBadRequest)
 		return
 	}
 	entry, err := h.deps.Rank(r.Context(), path)
 	if err != nil {
 		// If upstream exposes not-found, translate; otherwise 500
 		if isNotFound(err) {
-			writeError(w, http.StatusNotFound, "not_found", Wrap(op, err))
+			writeError(w, http.StatusNotFound, "not_found", err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", Wrap(op, err))
+		writeError(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, entry)

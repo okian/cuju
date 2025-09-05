@@ -13,7 +13,7 @@ import (
 func main() {
 	var (
 		baseURL    = flag.String("url", "http://localhost:9080", "Base URL of the service")
-		numEvents  = flag.Int("events", 100000, "Number of events to generate and submit")
+		numEvents  = flag.Int("events", 10000, "Number of events to generate and submit")
 		topN       = flag.Int("top", 50, "Number of top entries to fetch from leaderboard")
 		workers    = flag.Int("workers", runtime.NumCPU()*2, "Number of concurrent workers")
 		timeout    = flag.Duration("timeout", 30*time.Second, "HTTP request timeout")

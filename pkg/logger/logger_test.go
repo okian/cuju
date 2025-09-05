@@ -11,7 +11,11 @@ func TestLoggerInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to initialize development logger: %v", err)
 	}
-	defer Sync()
+	defer func() {
+		if err := Sync(); err != nil {
+			t.Errorf("failed to sync logger: %v", err)
+		}
+	}()
 
 	logger := Get()
 	if logger == nil {
@@ -23,7 +27,11 @@ func TestLoggerInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to initialize production logger: %v", err)
 	}
-	defer Sync()
+	defer func() {
+		if err := Sync(); err != nil {
+			t.Errorf("failed to sync logger: %v", err)
+		}
+	}()
 
 	logger = Get()
 	if logger == nil {
@@ -37,7 +45,11 @@ func TestLoggerBasic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to initialize logger: %v", err)
 	}
-	defer Sync()
+	defer func() {
+		if err := Sync(); err != nil {
+			t.Errorf("failed to sync logger: %v", err)
+		}
+	}()
 
 	logger := Get()
 	if logger == nil {
@@ -53,7 +65,11 @@ func TestLoggerNamed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to initialize logger: %v", err)
 	}
-	defer Sync()
+	defer func() {
+		if err := Sync(); err != nil {
+			t.Errorf("failed to sync logger: %v", err)
+		}
+	}()
 
 	namedLogger := Named("test")
 	if namedLogger == nil {

@@ -34,11 +34,11 @@ func (h *EventsHandler) HandlePostEvent(w http.ResponseWriter, r *http.Request) 
 	}
 	var req eventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", WrapKind(op, ErrBadRequest, err))
+		writeError(w, http.StatusBadRequest, "bad_request", err)
 		return
 	}
 	if err := req.validate(); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", WrapKind(op, ErrBadRequest, err))
+		writeError(w, http.StatusBadRequest, "bad_request", err)
 		return
 	}
 
@@ -52,7 +52,7 @@ func (h *EventsHandler) HandlePostEvent(w http.ResponseWriter, r *http.Request) 
 	if ok := h.deps.Enqueue(r.Context(), req); !ok {
 		// Rollback the "seen" status since enqueue failed
 		h.deps.Unrecord(r.Context(), req.EventID)
-		writeError(w, http.StatusTooManyRequests, "backpressure", NewKind(op, ErrBackpressure))
+		writeError(w, http.StatusTooManyRequests, "backpressure", ErrBackpressure)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, ackResponse{Status: "accepted", Duplicate: false})

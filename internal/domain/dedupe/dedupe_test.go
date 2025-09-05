@@ -307,8 +307,8 @@ func TestDedupeEdgeCases(t *testing.T) {
 			d := dedupe.NewInMemoryDeduper()
 
 			Convey("Then it should not panic", func() {
-				So(func() { d.SeenAndRecord(nil, "event-1") }, ShouldNotPanic)
-				So(func() { d.Unrecord(nil, "event-1") }, ShouldNotPanic)
+				So(func() { d.SeenAndRecord(context.TODO(), "event-1") }, ShouldNotPanic)
+				So(func() { d.Unrecord(context.TODO(), "event-1") }, ShouldNotPanic)
 			})
 		})
 

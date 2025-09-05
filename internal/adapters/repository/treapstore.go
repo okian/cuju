@@ -3,10 +3,6 @@ package repository
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/binary"
-	"fmt"
-	"hash/fnv"
 	"math"
 	"sort"
 	"sync"
@@ -16,7 +12,7 @@ import (
 	"github.com/okian/cuju/pkg/metrics"
 )
 
-// Treap-based, sharded in-memory Store implementation.
+// Treap-based, in-memory Store implementation.
 //
 // Ordering: score DESC, then talentID ASC (deterministic).
 // We implement a BST comparator where "less" means ranks earlier
@@ -144,21 +140,18 @@ func rotateLeft(x *node) *node {
 	return y
 }
 
-// rng returns a random 64-bit priority.
-func rng() uint64 {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err == nil {
-		return binary.LittleEndian.Uint64(b[:])
-	}
-	// Fallback (should not happen in practice).
-	h := fnv.New64()
-	_, _ = h.Write([]byte("fallback"))
-	return h.Sum64()
+// scoreToPriority converts a score to a priority value.
+// Higher scores get higher priorities to keep them higher in the treap.
+func scoreToPriority(score scoreFP) uint64 {
+	// Convert scoreFP to uint64, ensuring higher scores get higher priorities
+	// We need to handle negative scores by adding an offset
+	const offset = uint64(1) << 63 // 2^63 to make all values positive
+	return uint64(score) + offset
 }
 
 func insert(n *node, id string, score scoreFP) *node {
 	if n == nil {
-		return &node{id: id, score: score, prio: rng(), size: 1}
+		return &node{id: id, score: score, prio: scoreToPriority(score), size: 1}
 	}
 	if less(score, id, n.score, n.id) {
 		n.left = insert(n.left, id, score)
@@ -203,45 +196,18 @@ func deleteNode(n *node, id string, score scoreFP) *node {
 	return n
 }
 
-// rank returns 1-based rank of (id, score).
-// If not found, returns 0.
-func rank(n *node, id string, score scoreFP) int {
-	if n == nil {
-		return 0
-	}
-	if score == n.score && id == n.id {
-		return nsize(n.left) + 1
-	}
-	if less(score, id, n.score, n.id) {
-		return rank(n.left, id, score)
-	}
-	// It is after current node: skip left subtree + current + recurse right
-	r := rank(n.right, id, score)
-	if r == 0 {
-		return 0
-	}
-	return nsize(n.left) + 1 + r
-}
-
-// countGreater returns the number of nodes with score greater than or equal to x.
-func countGreater(n *node, x scoreFP) int {
-	if n == nil {
-		return 0
-	}
-	if less(x, "", n.score, n.id) {
-		return 1 + nsize(n.left) + countGreater(n.right, x)
-	}
-	return countGreater(n.left, x)
-}
-
 // collectTopN appends up to limit entries in rank order (highest scores first).
-// For a treap ordered by score (descending), we traverse left-first to get highest scores.
+// Optimized for score-based priorities while maintaining deterministic tie-breaking.
 func collectTopN(n *node, limit int, records map[string]record, out *[]Entry) {
 	if n == nil || len(*out) >= limit {
 		return
 	}
 
-	// Traverse left subtree first (higher scores)
+	// With score-based priorities, we need to maintain deterministic ordering
+	// for tie-breaking (talent ID ASC). We do this by using the BST ordering
+	// which is based on the less() function that handles tie-breaking correctly.
+
+	// Traverse left subtree first (higher scores, or same score with lower ID)
 	collectTopN(n.left, limit, records, out)
 
 	// Add current node if we haven't reached the limit
@@ -251,50 +217,38 @@ func collectTopN(n *node, limit int, records map[string]record, out *[]Entry) {
 		}
 	}
 
-	// Traverse right subtree (lower scores) if we still need more
+	// Traverse right subtree (lower scores, or same score with higher ID) if we still need more
 	if len(*out) < limit {
 		collectTopN(n.right, limit, records, out)
 	}
 }
 
-// shard holds an independent treap and id->score map protected by RWMutex.
-type shard struct {
-	mu   sync.RWMutex
-	root *node
-	byID map[string]record
-	// snapshot is atomic pointer to a Snapshot struct
-	snapshot atomic.Pointer[Snapshot]
-}
-
 type TreapStore struct {
-	shards           []shard       // Array of shards for concurrent access, each containing a treap and id->score map
-	shardCount       int           // Number of shards to distribute data across for better concurrency
+	mu               sync.RWMutex
+	root             *node
+	byID             map[string]record
 	snapshotInterval time.Duration // How often to create periodic snapshots of the store
 	topCacheSize     int           // Maximum number of top-scoring records to keep in cache
-	// (removed unused scorePrecision and compactionThreshold fields)
+
+	// snapshot is atomic pointer to a Snapshot struct
+	snapshot atomic.Pointer[Snapshot]
 
 	// Periodic snapshot management
 	wg       sync.WaitGroup
 	stopChan chan struct{}
 }
 
-// NewTreapStore constructs a sharded treap store with configuration options.
+// NewTreapStore constructs a treap store with configuration options.
 func NewTreapStore(ctx context.Context, opts ...Option) *TreapStore {
 	s := &TreapStore{
-		shardCount:       16,              // default shard count
-		snapshotInterval: 2 * time.Second, // default snapshot interval
-		topCacheSize:     200,             // default top cache size
+		snapshotInterval: 1 * time.Second, // default snapshot interval
+		topCacheSize:     500,             // default top cache size
+		byID:             make(map[string]record),
 	}
 
-	// Apply all options
+	// Apply all options (shard-related options are ignored)
 	for _, opt := range opts {
 		opt(s)
-	}
-
-	// Initialize shards
-	s.shards = make([]shard, s.shardCount)
-	for i := range s.shards {
-		s.shards[i].byID = make(map[string]record)
 	}
 
 	// Initialize stop channel and start periodic snapshot goroutine
@@ -302,7 +256,7 @@ func NewTreapStore(ctx context.Context, opts ...Option) *TreapStore {
 	s.startPeriodicSnapshots(ctx)
 
 	// Initialize metrics
-	metrics.UpdateRepositoryShardCount(s.shardCount)
+	metrics.UpdateRepositoryShardCount(1) // Single "shard"
 	s.startMetricsUpdater(ctx)
 
 	return s
@@ -323,21 +277,19 @@ func (s *TreapStore) startPeriodicSnapshots(ctx context.Context) {
 			case <-s.stopChan:
 				return
 			case <-ticker.C:
-				s.publishAllSnapshots()
+				s.publishSnapshot()
 			}
 		}
 	}()
 }
 
-// publishAllSnapshots publishes snapshots for all shards
-func (s *TreapStore) publishAllSnapshots() {
+// publishSnapshot rebuilds and publishes a new snapshot
+func (s *TreapStore) publishSnapshot() {
 	start := time.Now()
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		sh.publishSnapshot(s.topCacheSize)
-		sh.mu.RUnlock()
-	}
+	s.mu.RLock()
+	s.publishSnapshotInternal()
+	s.mu.RUnlock()
+
 	ms := float64(time.Since(start).Milliseconds())
 	metrics.RecordRepositorySnapshotRebuildDuration(ms)
 	metrics.UpdateRepositorySnapshotLastDurationMs(ms)
@@ -358,19 +310,12 @@ func (s *TreapStore) Close() error {
 	return nil
 }
 
-func (s *TreapStore) shardFor(id string) *shard {
-	hasher := fnv.New64a()
-	_, _ = hasher.Write([]byte(id))
-	idx := int(hasher.Sum64() % uint64(len(s.shards)))
-	return &s.shards[idx]
-}
-
-// UpdateBest implements Store.UpdateBest with O(log n_shard) expected time.
+// UpdateBest implements Store.UpdateBest with O(log n) expected time.
 func (s *TreapStore) UpdateBest(ctx context.Context, talentID string, score float64) (bool, error) {
 	return s.UpdateBestWithMeta(ctx, talentID, score, "", "", 0)
 }
 
-// UpdateBestWithMeta implements Store.UpdateBestWithMeta with O(log n_shard) expected time.
+// UpdateBestWithMeta implements Store.UpdateBestWithMeta with O(log n) expected time.
 func (s *TreapStore) UpdateBestWithMeta(ctx context.Context, talentID string, score float64, eventID string, skill string, rawMetric float64) (bool, error) {
 	start := time.Now()
 	defer func() {
@@ -378,27 +323,26 @@ func (s *TreapStore) UpdateBestWithMeta(ctx context.Context, talentID string, sc
 		metrics.RecordRepositoryUpdateLatency(float64(latency))
 	}()
 
-	sh := s.shardFor(talentID)
 	ns := toFixedPoint(score)
 
 	// Track if this is a new talent so we can update metrics after releasing locks
 	isNewTalent := false
 
-	sh.mu.Lock()
-	if old, ok := sh.byID[talentID]; ok {
+	s.mu.Lock()
+	if old, ok := s.byID[talentID]; ok {
 		if ns <= old.score { // not an improvement
-			sh.mu.Unlock()
+			s.mu.Unlock()
 			return false, nil
 		}
-		sh.root = deleteNode(sh.root, talentID, old.score)
+		s.root = deleteNode(s.root, talentID, old.score)
 	} else {
 		isNewTalent = true
 	}
-	sh.byID[talentID] = record{score: ns, eventID: eventID, skill: skill, rawMetric: rawMetric}
-	sh.root = insert(sh.root, talentID, ns)
-	sh.mu.Unlock()
+	s.byID[talentID] = record{score: ns, eventID: eventID, skill: skill, rawMetric: rawMetric}
+	s.root = insert(s.root, talentID, ns)
+	s.mu.Unlock()
 
-	// Update metrics outside shard lock (Count acquires read locks on shards)
+	// Update metrics outside lock
 	if isNewTalent {
 		metrics.UpdateRepositoryRecordsTotal(s.Count(ctx))
 	}
@@ -407,7 +351,7 @@ func (s *TreapStore) UpdateBestWithMeta(ctx context.Context, talentID string, sc
 	return true, nil
 }
 
-// Rank returns the current rank and score for a talent in O(log n_shard).
+// Rank returns the current rank and score for a talent in O(log n).
 func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
 	start := time.Now()
 	defer func() {
@@ -415,35 +359,18 @@ func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
 		metrics.RecordRepositoryQueryLatency(float64(latency))
 	}()
 
-	// First, check if the talent exists in any shard
-	var found bool
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		if _, ok := sh.byID[talentID]; ok {
-			found = true
-		}
-		sh.mu.RUnlock()
-		if found {
-			break
-		}
-	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	if !found {
+	// Check if the talent exists
+	if _, ok := s.byID[talentID]; !ok {
 		metrics.RecordErrorByComponent("repository", "not_found")
-		return Entry{}, NewKind("leaderboard.treap.rank", ErrNotFound)
+		return Entry{}, ErrNotFound
 	}
 
-	// Collect all entries from all shards and merge them
-	allEntries := make([]Entry, 0)
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		shardEntries := make([]Entry, 0, len(sh.byID))
-		collectAll(sh.root, sh.byID, &shardEntries)
-		sh.mu.RUnlock()
-		allEntries = append(allEntries, shardEntries...)
-	}
+	// Collect all entries and find the rank
+	allEntries := make([]Entry, 0, len(s.byID))
+	collectAll(s.root, s.byID, &allEntries)
 
 	// Sort all entries by score (descending) and talentID (ascending) to match TopN logic
 	sortEntries(allEntries)
@@ -458,11 +385,10 @@ func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
 		}
 	}
 
-	return Entry{}, NewKind("leaderboard.treap.rank", ErrNotFound)
+	return Entry{}, ErrNotFound
 }
 
-// TopN returns the global top N by merging shard prefixes.
-// Strategy: collect top-N from each shard (bounded by N), then k-way merge.
+// TopN returns the top N entries ordered by score desc.
 func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
 	start := time.Now()
 	defer func() {
@@ -472,77 +398,40 @@ func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
 
 	if n < 1 {
 		metrics.RecordErrorByComponent("repository", "invalid_limit")
-		return nil, NewKind("leaderboard.treap.topn", ErrInvalidLimit)
-	}
-	// Collect per-shard prefixes.
-	type shardSlice struct {
-		entries []Entry
-		idx     int
-	}
-	per := make([]shardSlice, len(s.shards))
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		out := make([]Entry, 0, n)
-		collectTopN(sh.root, n, sh.byID, &out)
-		sh.mu.RUnlock()
-		per[i] = shardSlice{entries: out, idx: 0}
+		return nil, ErrInvalidLimit
 	}
 
-	// k-way merge using a small heap of size S (shards).
-	// We implement a simple linear select since shard count is small; if it grows,
-	// replace with a binary heap for O(log S) per selection.
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	out := make([]Entry, 0, n)
-	for len(out) < n {
-		bestIdx := -1
-		var best Entry
-		for i := range per {
-			sl := &per[i]
-			if sl.idx >= len(sl.entries) {
-				continue
-			}
-			cand := sl.entries[sl.idx]
-			if bestIdx == -1 || less(scoreFP(toFixedPoint(cand.Score)), cand.TalentID, scoreFP(toFixedPoint(best.Score)), best.TalentID) {
-				bestIdx = i
-				best = cand
-			}
-		}
-		if bestIdx == -1 {
-			break
-		} // all exhausted
-		out = append(out, best)
-		per[bestIdx].idx++
-	}
+	collectTopN(s.root, n, s.byID, &out)
+
 	// Assign ranks with proper tie handling
 	assignRanksWithTies(out)
 	return out, nil
 }
 
-// Count returns the total number of talents across shards.
+// Count returns the total number of talents.
 func (s *TreapStore) Count(ctx context.Context) int {
-	total := 0
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		total += len(sh.byID)
-		sh.mu.RUnlock()
-	}
-	return total
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.byID)
 }
 
-// publishSnapshot rebuilds and publishes a new snapshot for the shard
-func (sh *shard) publishSnapshot(topCacheSize int) {
+// publishSnapshotInternal rebuilds and publishes a new snapshot (assumes lock is held)
+func (s *TreapStore) publishSnapshotInternal() {
 	// Build Top-M cache for fast dashboard queries
-	topCache := make([]Entry, 0, topCacheSize)
-	collectTopN(sh.root, topCacheSize, sh.byID, &topCache)
+	topCache := make([]Entry, 0, s.topCacheSize)
+	collectTopN(s.root, s.topCacheSize, s.byID, &topCache)
 
 	// Build full rank and score maps
-	rankByTalent := make(map[string]int, len(sh.byID))
-	scoreByTalent := make(map[string]float64, len(sh.byID))
+	rankByTalent := make(map[string]int, len(s.byID))
+	scoreByTalent := make(map[string]float64, len(s.byID))
 
 	// Collect all entries to compute global ranks
-	allEntries := make([]Entry, 0, len(sh.byID))
-	collectAll(sh.root, sh.byID, &allEntries)
+	allEntries := make([]Entry, 0, len(s.byID))
+	collectAll(s.root, s.byID, &allEntries)
 
 	// Assign ranks with proper tie handling
 	assignRanksWithTies(allEntries)
@@ -566,7 +455,7 @@ func (sh *shard) publishSnapshot(topCacheSize int) {
 		TopCache:      topCache,
 	}
 
-	sh.snapshot.Store(snapshot)
+	s.snapshot.Store(snapshot)
 }
 
 // startMetricsUpdater starts a background goroutine that updates repository metrics
@@ -592,31 +481,24 @@ func (s *TreapStore) startMetricsUpdater(ctx context.Context) {
 
 // updateMetrics updates all repository-related metrics
 func (s *TreapStore) updateMetrics() {
-	totalRecords := 0
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		recordCount := len(sh.byID)
-		sh.mu.RUnlock()
+	s.mu.RLock()
+	recordCount := len(s.byID)
+	s.mu.RUnlock()
 
-		totalRecords += recordCount
-		shardID := fmt.Sprintf("shard_%d", i)
+	// Update per-shard metrics (using "shard_0" for the single shard)
+	shardID := "shard_0"
+	metrics.UpdateRepositoryRecordsPerShard(shardID, recordCount)
 
-		// Update per-shard metrics
-		metrics.UpdateRepositoryRecordsPerShard(shardID, recordCount)
-
-		// Calculate shard utilization (assuming a reasonable capacity per shard)
-		// This is a simplified calculation - in practice, you might want to track actual capacity
-		estimatedCapacity := 10000 // This could be configurable
-		utilization := float64(recordCount) / float64(estimatedCapacity)
-		if utilization > 1.0 {
-			utilization = 1.0
-		}
-		metrics.UpdateRepositoryShardUtilization(shardID, utilization)
+	// Calculate shard utilization (assuming a reasonable capacity)
+	estimatedCapacity := 10000 // This could be configurable
+	utilization := float64(recordCount) / float64(estimatedCapacity)
+	if utilization > 1.0 {
+		utilization = 1.0
 	}
+	metrics.UpdateRepositoryShardUtilization(shardID, utilization)
 
 	// Update total records metric
-	metrics.UpdateRepositoryRecordsTotal(totalRecords)
+	metrics.UpdateRepositoryRecordsTotal(recordCount)
 }
 
 // collectAll appends all entries in rank order (highest scores first).

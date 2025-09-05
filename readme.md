@@ -25,7 +25,7 @@ docker-compose up -d  # Run with Docker
 **Start here for comprehensive system understanding:**
 
 * **[🏗️ Complete Architecture Documentation](docs/ARCHITECTURE.md)** - Detailed system architecture, data structures, time complexities, and design patterns
-* **[📊 Data Structures & Algorithms](docs/DATA_STRUCTURES.md)** - Deep dive into treap implementation, sharding strategy, and complexity analysis  
+* **[📊 Data Structures & Algorithms](docs/DATA_STRUCTURES.md)** - Deep dive into treap implementation, concurrency strategy, and complexity analysis  
 * **[🔄 Event Flow Sequence Diagram](docs/SEQUENCE_DIAGRAM.md)** - Visual representation of the complete event processing flow
 * **[⚡ Quick Reference Guide](docs/QUICK_REFERENCE.md)** - Developer quick start guide with API examples and configuration
 
@@ -75,13 +75,13 @@ curl "http://localhost:9080/rank/t1"
 **Core Features:**
 - **Idempotent Event Processing** - Duplicate events are detected and ignored
 - **Asynchronous Scoring** - Events processed in background workers with simulated ML latency
-- **Sharded Storage** - Data distributed across multiple shards for concurrent access
+- **High-Performance Storage** - Single treap with RWMutex for concurrent access
 - **Real-time Metrics** - Comprehensive Prometheus metrics for monitoring
 - **High Performance** - Optimized for sub-40ms read latencies
 
 **Key Design Decisions:**
 - **Treap Data Structure** - Chosen over simple maps for optimal Top-N query performance
-- **Sharded Architecture** - Enables concurrent updates while maintaining global ordering
+- **Single Treap Architecture** - Enables concurrent updates while maintaining global ordering
 - **Fixed-Point Arithmetic** - Eliminates floating-point precision issues
 - **Read-Heavy Optimization** - Prioritizes leaderboard queries over individual updates
 
@@ -212,7 +212,7 @@ go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
 **Key Components:**
 * **HTTP API Layer** - Request handling and validation
 * **Application Service** - Component orchestration and lifecycle  
-* **Repository Layer** - Sharded treap store for leaderboard data
+* **Repository Layer** - Single treap store for leaderboard data
 * **Message Queue** - Asynchronous event processing
 * **Worker Pool** - Concurrent event scoring
 * **Deduplication Cache** - Idempotent event processing
@@ -221,9 +221,9 @@ go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
 
 **Time Complexities:**
 * Event Submission: **O(1)** - Hash map lookup + channel send
-* Leaderboard Query: **O(n_shard × log n_shard + N)** - K-way merge
-* Rank Lookup: **O(n_shard × log n_shard)** - Global rank calculation
-* Update Operations: **O(log n_shard)** - Treap insert/update
+* Leaderboard Query: **O(log n + N)** - Treap in-order traversal
+* Rank Lookup: **O(log n)** - Single treap rank calculation
+* Update Operations: **O(log n)** - Treap insert/update
 
 **Scale:**
 * **MVP (Current)**: Single process, in-memory, < 1M talents, < 10K events/sec
@@ -259,8 +259,6 @@ addr: ":9080"
 queue_size: 100000
 worker_count: 16
 dedupe_size: 500000
-shard_count: 8
-max_leaderboard_limit: 100
 scoring_latency_min_ms: 80
 scoring_latency_max_ms: 150
 skill_weights:

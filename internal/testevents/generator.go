@@ -15,7 +15,7 @@ func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event,
 	log.Printf("🎲 Generating %d events with unique talent IDs...", config.NumEvents)
 
 	events := make([]Event, config.NumEvents)
-	rand.Seed(time.Now().UnixNano())
+	// rand.Seed is deprecated in Go 1.20+, using default source
 
 	// Pre-allocate talent IDs to ensure uniqueness
 	talentIDs := make([]string, config.NumEvents)

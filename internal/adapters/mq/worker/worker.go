@@ -213,7 +213,7 @@ type WorkerPool struct {
 // NewWorkerPool creates a new worker pool
 func NewWorkerPool(workerCount int, queue Queue, scorer Scorer, updater Updater) *WorkerPool {
 	if workerCount < 1 {
-		workerCount = runtime.NumCPU() * 2
+		workerCount = runtime.NumCPU() * 4
 	}
 
 	pool := &WorkerPool{

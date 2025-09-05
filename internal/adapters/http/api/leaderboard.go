@@ -14,15 +14,13 @@ type LeaderboardDependencies interface {
 
 // LeaderboardHandler handles leaderboard requests
 type LeaderboardHandler struct {
-	deps     LeaderboardDependencies
-	maxLimit int
+	deps LeaderboardDependencies
 }
 
 // NewLeaderboardHandler creates a new leaderboard handler
-func NewLeaderboardHandler(deps LeaderboardDependencies, maxLimit int) *LeaderboardHandler {
+func NewLeaderboardHandler(deps LeaderboardDependencies) *LeaderboardHandler {
 	return &LeaderboardHandler{
-		deps:     deps,
-		maxLimit: maxLimit,
+		deps: deps,
 	}
 }
 
@@ -36,16 +34,12 @@ func (h *LeaderboardHandler) HandleGetLeaderboard(w http.ResponseWriter, r *http
 	limitStr := r.URL.Query().Get("limit")
 	n, err := strconv.Atoi(limitStr)
 	if err != nil || n < 1 {
-		writeError(w, http.StatusBadRequest, "bad_request", NewKind(op, ErrBadRequest))
-		return
-	}
-	if n > h.maxLimit {
-		writeError(w, http.StatusBadRequest, "limit_exceeded", NewKind(op, ErrBadRequest))
+		writeError(w, http.StatusBadRequest, "bad_request", ErrBadRequest)
 		return
 	}
 	entries, err := h.deps.TopN(r.Context(), n)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", Wrap(op, err))
+		writeError(w, http.StatusInternalServerError, "internal_error", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, entries)

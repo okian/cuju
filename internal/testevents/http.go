@@ -62,7 +62,11 @@ func unmarshalJSON(data []byte, v interface{}) error {
 
 // readResponseBody reads and closes the response body
 func readResponseBody(resp *http.Response) ([]byte, error) {
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}()
 	return io.ReadAll(resp.Body)
 }
 
@@ -170,12 +174,16 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 }
 
 // submitSingleEvent submits a single event and returns the result
-func submitSingleEvent(ctx context.Context, client *HTTPClient, url string, event Event) string {
+func submitSingleEvent(_ context.Context, client *HTTPClient, url string, event Event) string {
 	resp, err := client.Post(url, event)
 	if err != nil {
 		return "failed"
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}()
 
 	// Read response body
 	body, err := readResponseBody(resp)

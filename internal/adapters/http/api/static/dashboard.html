@@ -35,14 +35,6 @@
     .legend{ font-size:11px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; }
     .legend span{ display:inline-flex; align-items:center; gap:6px; }
     .b{ font-weight:600; color:#dce6f3; }
-    /* Top 10 leaderboard styles */
-    .lb { display:flex; flex-direction:column; gap:6px; }
-    .lb-row { display:grid; grid-template-columns: 40px 1fr 100px; gap:8px; align-items:center; padding:6px 8px; background:#0e1729; border:1px solid #1b2944; border-radius:8px; }
-    .lb-header { background:transparent; border:none; padding:0 4px; color:var(--muted); font-size:11px; }
-    .lb-rank { font-weight:700; color:#dce6f3; }
-    .lb-talent a { color:#4f9cf9; text-decoration:none; font-weight:600; }
-    .lb-talent a:hover { text-decoration:underline; }
-    .lb-score { text-align:right; color:#dce6f3; font-variant-numeric: tabular-nums; }
     .panel.tall { max-height: 320px; }
     @media (max-width: 1200px) {
       .panel.wide { flex: 1 1 100%; }
@@ -182,52 +174,6 @@
       return Math.max(0, (last - prev) / dtSec);
     }
 
-    async function fetchTop10() {
-      try {
-        const r = await fetch('/leaderboard?limit=10', { headers: { 'Accept': 'application/json' } });
-        if (!r.ok) return [];
-        return await r.json();
-      } catch {
-        return [];
-      }
-    }
-
-    function shortId(id) {
-      if (!id) return '-';
-      return id.length > 8 ? (id.slice(0,8) + '…') : id;
-    }
-
-    function renderTop10(entries) {
-      const rowsEl = document.getElementById('top10-rows');
-      if (!rowsEl) return;
-      rowsEl.innerHTML = '';
-      for (const e of entries) {
-        const row = document.createElement('div');
-        row.className = 'lb-row';
-
-        const rank = document.createElement('div');
-        rank.className = 'lb-rank';
-        rank.textContent = String(e.rank ?? '');
-
-        const talent = document.createElement('div');
-        talent.className = 'lb-talent';
-        const a = document.createElement('a');
-        a.href = '/rank/' + encodeURIComponent(e.talent_id || '');
-        a.textContent = shortId(e.talent_id || '');
-        a.title = e.talent_id || '';
-        talent.appendChild(a);
-
-        const score = document.createElement('div');
-        score.className = 'lb-score';
-        const s = Number(e.score);
-        score.textContent = isFinite(s) ? s.toFixed(2) : '-';
-
-        row.appendChild(rank);
-        row.appendChild(talent);
-        row.appendChild(score);
-        rowsEl.appendChild(row);
-      }
-    }
 
     function calcEndpointRate(endpoint) {
       if (history.length < 2) return 0;
@@ -286,7 +232,6 @@
         document.getElementById('k-events').textContent = eventsProcessed.toLocaleString();
         document.getElementById('k-dupes').textContent = eventsDup.toLocaleString();
         document.getElementById('k-records').textContent = repoRecords.toLocaleString();
-        document.getElementById('k-shards').textContent = repoShards.toLocaleString();
 
         // Flow Overview values
         const utilPct = Math.max(0, Math.min(100, Math.round((queueSize / queueCap) * 100)));
@@ -299,9 +244,6 @@
         document.getElementById('f-worker-mps').textContent = workerMps.toFixed(1);
         document.getElementById('f-records').textContent = repoRecords.toLocaleString();
         document.getElementById('f-backlog-delta').textContent = (backlogDelta>=0?'+':'') + backlogDelta.toFixed(1) + ' rps';
-        document.getElementById('f-snap-time').textContent = snapTimeStr;
-        document.getElementById('f-snap-dur').textContent = snapLastDurMs ? (Math.round(snapLastDurMs) + ' ms') : '-';
-        document.getElementById('f-snap-count').textContent = snapCount.toLocaleString();
 
         // Charts
         // API Calls chart per endpoint
@@ -365,23 +307,12 @@
         trimSeries(eventsChart, now);
         eventsChart.update();
 
-        const queueGauge = ensureChart('c-queue-util', gaugeConfig('Queue Utilization', '#f39c12'));
-        const utilPctClamped = Math.max(0, Math.min(100, utilPct));
-        updateGauge(queueGauge, isFinite(utilPctClamped) ? utilPctClamped : 0);
-        const utilTextEl = document.getElementById('queue-util-text');
-        if (utilTextEl) utilTextEl.textContent = (isFinite(utilPct) ? utilPct.toFixed(1) : '0.0') + '%';
-
-        const workersGauge = ensureChart('c-workers', gaugeConfig('Workers', '#9b59b6'));
-        updateGauge(workersGauge, Math.max(0, Math.min(100, workers)));
 
         const recordsChart = ensureChart('c-records', timeSeriesConfig('Records', '#16a085'));
         recordsChart.data.datasets[0].data.push({ x: now, y: Math.max(0, repoRecords) });
         trimSeries(recordsChart, now);
         recordsChart.update();
 
-        // Top 10 leaderboard
-        const top10 = await fetchTop10();
-        renderTop10(top10);
 
       } catch (e) {
         console.error(e);
@@ -457,31 +388,11 @@
         <div class="kpi"><div class="label">Events Processed</div><div class="value" id="k-events">-</div></div>
         <div class="kpi"><div class="label">Duplicate Events</div><div class="value" id="k-dupes">-</div></div>
         <div class="kpi"><div class="label">Repository Records</div><div class="value" id="k-records">-</div></div>
-        <div class="kpi"><div class="label">Repository Shards</div><div class="value" id="k-shards">-</div></div>
-        <div class="kpi"><div class="label">Last Snapshot Time</div><div class="value" id="f-snap-time">-</div></div>
-        <div class="kpi"><div class="label">Last Snapshot Duration</div><div class="value" id="f-snap-dur">-</div></div>
-        <div class="kpi"><div class="label">Snapshot Count</div><div class="value" id="f-snap-count">-</div></div>
       </div>
-    </div>
-    <div class="panel tall">
-      <h3>Queue Utilization</h3>
-      <canvas id="c-queue-util"></canvas>
-      <div class="label" id="queue-util-text" aria-live="polite">0%</div>
     </div>
     <div class="panel wide tall">
       <h3>API Response Time (ms)</h3>
       <canvas id="c-api-latency"></canvas>
-    </div>
-    <div class="panel tall">
-      <h3>Workers Utilization</h3>
-      <canvas id="c-workers"></canvas>
-    </div>
-    <div class="panel">
-      <h3>Top 10 Leaderboard</h3>
-      <div class="lb">
-        <div class="lb-row lb-header"><div>#</div><div>Talent</div><div>Score</div></div>
-        <div id="top10-rows"></div>
-      </div>
     </div>
     <div class="panel wide tall">
       <h3>Events per Second</h3>

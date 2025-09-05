@@ -42,7 +42,7 @@ Options:
   -url string
         Base URL of the service (default "http://localhost:9080")
   -events int
-        Number of events to generate and submit (default 100000)
+        Number of events to generate and submit (default 10000)
   -top int
         Number of top entries to fetch from leaderboard (default 50)
   -workers int

@@ -23,11 +23,6 @@ queue_size: 100000
 # Deduplication cache size (default: 500000)
 dedupe_size: 500000
 
-# Number of shards for the leaderboard store (default: 8)
-shard_count: 16
-
-# Max value for GET /leaderboard?limit (default: 100)
-max_leaderboard_limit: 500
 
 # Simulated scoring latency bounds (milliseconds) (defaults: 80 min, 150 max)
 scoring_latency_min_ms: 80

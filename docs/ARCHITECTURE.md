@@ -19,7 +19,7 @@ CUJU is a high-performance, in-memory leaderboard system designed for real-time 
 ### Key Features
 - **Idempotent Event Processing**: Duplicate events are detected and ignored
 - **Asynchronous Scoring**: Events are processed in background workers with simulated ML latency
-- **Sharded Storage**: Data is distributed across multiple shards for concurrent access
+- **High-Performance Storage**: Optimized treap-based storage for fast operations
 - **Real-time Metrics**: Comprehensive Prometheus metrics for monitoring
 - **High Performance**: Optimized for sub-40ms read latencies
 
@@ -43,7 +43,6 @@ All components use functional options for configuration:
 service := app.New(
     app.WithWorkerCount(16),
     app.WithQueueSize(100000),
-    app.WithShardCount(8),
 )
 ```
 
@@ -69,23 +68,24 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 
 ### 1. Treap-Based Leaderboard Store
 
-**Data Structure**: Sharded Treap (Tree + Heap)
+**Data Structure**: Treap (Tree + Heap)
 - **Purpose**: Maintains sorted leaderboard with O(log n) operations
-- **Sharding**: Data distributed across multiple shards for concurrency
+- **Concurrency**: Single treap with RWMutex for thread-safe access
 
 **Time Complexities**:
-- `UpdateBest()`: **O(log n_shard)** - Insert/update in treap
-- `TopN()`: **O(n_shard × log n_shard + N)** - K-way merge of shard results
-- `Rank()`: **O(n_shard × log n_shard)** - Global rank calculation across shards
-- `Count()`: **O(n_shard)** - Sum across all shards
+- `UpdateBest()`: **O(log n)** - Insert/update in treap
+- `TopN()`: **O(log n + N)** - In-order traversal with limit
+- `Rank()`: **O(log n)** - In-order traversal to find rank
+- `Count()`: **O(1)** - Direct count from map
 
 **Space Complexity**: **O(N)** where N is total number of talents
 
 **Key Features**:
 - Fixed-point arithmetic for score precision
+- Score-based treap priorities for optimal balance
 - Deterministic tie-breaking (talent_id ASC)
 - Periodic snapshots for fast reads
-- Shard-based concurrency control
+- Thread-safe concurrent access
 
 ### 2. In-Memory Event Queue
 
@@ -163,14 +163,13 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 ### 3. Repository Layer (`internal/adapters/repository/`)
 
 **Implementation**: TreapStore
-- **Sharding**: FNV-1a hash-based shard selection
-- **Concurrency**: RWMutex per shard
+- **Concurrency**: RWMutex for thread-safe access
 - **Snapshots**: Periodic snapshot generation for fast reads
 
 **Key Features**:
 - Fixed-point score representation for precision
 - Deterministic ordering (score DESC, talent_id ASC)
-- Global rank calculation across shards
+- Efficient rank calculation with in-order traversal
 - Memory-efficient node reuse
 
 ### 4. Message Queue (`internal/adapters/mq/`)
@@ -312,9 +311,9 @@ sequenceDiagram
 ]
 ```
 
-**Time Complexity**: **O(n_shard × log n_shard + N)**
-- Collect top-N from each shard: O(n_shard × log n_shard)
-- K-way merge: O(N)
+**Time Complexity**: **O(log n + N)**
+- In-order traversal with limit: O(log n + N)
+- Assign ranks: O(N)
 
 **Caching**: Periodic snapshots provide O(1) access to top entries
 
@@ -329,9 +328,8 @@ sequenceDiagram
 {"rank": 5, "talent_id": "t1", "score": 78.9}
 ```
 
-**Time Complexity**: **O(n_shard × log n_shard)**
-- Search across all shards: O(n_shard)
-- Global rank calculation: O(n_shard × log n_shard)
+**Time Complexity**: **O(log n)**
+- In-order traversal to find rank: O(log n)
 
 **Error Handling**: Returns 404 if talent not found
 
@@ -369,15 +367,15 @@ sequenceDiagram
 - Implement checkpointing/restore mechanisms
 - Consider hybrid approach with fast cache + persistent store
 
-### 2. Sharding Strategy
+### 2. Concurrency Strategy
 
-**Choice**: Hash-based Sharding
+**Choice**: Single Treap with RWMutex
 **Rationale**:
-- **Pros**: Even distribution, O(1) shard selection, good concurrency
-- **Cons**: Global operations require cross-shard coordination
-- **Trade-off**: Optimized for concurrent writes, read operations are more complex
+- **Pros**: Simple implementation, consistent performance, no cross-shard coordination
+- **Cons**: Single point of contention for writes
+- **Trade-off**: Optimized for read-heavy workloads with occasional writes
 
-**Alternative**: Range-based sharding (better for range queries but worse for concurrent writes)
+**Alternative**: Multiple treaps with load balancing (more complex but better write concurrency)
 
 ### 3. Data Structure: Treap vs Alternatives
 
@@ -418,10 +416,10 @@ The initial consideration was using a simple hash map for O(1) insert, update, a
 
 **Final Decision**: Treap provides the best balance:
 - **Compromise**: Accept O(log n) read/update complexity
-- **Benefit**: Achieve O(n_shard × log n_shard + N) for Top-N queries (where N is the limit)
+- **Benefit**: Achieve O(log n + N) for Top-N queries (where N is the limit)
 - **Result**: Optimal performance for the most critical operation (leaderboard queries)
 
-**Note**: The actual Top-N complexity is O(n_shard × log n_shard + N) due to cross-shard k-way merging. With 8 shards, this becomes O(8 × log(3.75M) + N) ≈ O(176 + N), which is still much better than O(n log n) for a simple map.
+**Note**: The Top-N complexity is O(log n + N) due to in-order traversal with early termination. For 30M talents, this becomes O(log(30M) + N) ≈ O(25 + N), which is much better than O(n log n) for a simple map.
 
 **API Call Pattern Analysis**:
 The system is designed for a **read-heavy workload** where:
@@ -483,7 +481,6 @@ addr: ":9080"
 queue_size: 100000
 worker_count: 16
 dedupe_size: 500000
-shard_count: 8
 max_leaderboard_limit: 100
 scoring_latency_min_ms: 80
 scoring_latency_max_ms: 150

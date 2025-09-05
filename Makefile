@@ -1,174 +1,105 @@
-.PHONY: build run test clean fmt vet lint cover tidy generate race help bench swagger docker-build docker-run docker-stop docker-clean docker-logs gen-site gen-openapi fetch-redoc stress-test
+.PHONY: build run test clean fmt vet lint cover tidy generate help bench
 
-# Use a workspace-local Go build cache when available (safe default)
+# Variables
+BINARY_NAME := cuju
+BINARY_PATH := bin/$(BINARY_NAME)
 GOCACHE ?= $(CURDIR)/.gocache
+GO_FLAGS := env GOCACHE=$(GOCACHE)
 
-# Build the binary
+
+# Build targets
 build:
-	env GOCACHE=$(GOCACHE) go build -o bin/cuju cmd/main.go
+	$(GO_FLAGS) go build -o $(BINARY_PATH) cmd/main.go
 
-# Run the application (server mode by default)
+# Run targets
 run: build
 	@echo "Starting CUJU leaderboard service..."
-	@echo "Dashboard will open at: http://localhost:9080/dashboard"
-	@echo "Press Ctrl+C to stop the service"
-	@echo ""
-	@# Start the service in background and open dashboard
-	@./bin/cuju & \
-	SERVER_PID=$$!; \
-	sleep 2; \
-	if command -v open >/dev/null 2>&1; then \
-		open http://localhost:9080/dashboard; \
-	elif command -v xdg-open >/dev/null 2>&1; then \
-		xdg-open http://localhost:9080/dashboard; \
-	elif command -v start >/dev/null 2>&1; then \
-		start http://localhost:9080/dashboard; \
-	else \
-		echo "Please open http://localhost:9080/dashboard in your browser"; \
-	fi; \
-	wait $$SERVER_PID
+	@echo "Dashboard: http://localhost:9080/dashboard"
+	@echo "Press Ctrl+C to stop"
+	@./$(BINARY_PATH)
 
-# Run the application without opening browser
-run-simple: build
-	./bin/cuju
-
-# Run specific commands
-gen-site: build
-	./bin/cuju -cmd=gen-site
-
-gen-openapi: build
-	./bin/cuju -cmd=gen-openapi
-
-fetch-redoc: build
-	./bin/cuju -cmd=fetch-redoc
-
-# Run tests
-test:
-	env GOCACHE=$(GOCACHE) go test ./... -run . -count=1
-
-# Run tests with race detector
-race:
-	env GOCACHE=$(GOCACHE) go test ./... -race -run . -count=1
-
-# Clean build artifacts
-clean:
-	rm -rf bin/
-
-# Run with specific configuration
 run-dev:
-	ADDR=:8080 QUEUE_SIZE=1024 WORKERS=4 go run cmd/main.go
+	ADDR=:8080 QUEUE_SIZE=1024 WORKERS=4 $(GO_FLAGS) go run cmd/main.go
 
-# Run with production-like settings
 run-prod:
-	ADDR=:8080 QUEUE_SIZE=4096 WORKERS=8 go run cmd/main.go
+	ADDR=:8080 QUEUE_SIZE=4096 WORKERS=8 $(GO_FLAGS) go run cmd/main.go
 
-# Format all Go files
-fmt:
-	go fmt ./...
+# Test targets
+test:
+	$(GO_FLAGS) go test ./... -v
 
-# Static analysis
-vet:
-	env GOCACHE=$(GOCACHE) go vet ./...
+test-race:
+	$(GO_FLAGS) go test ./... -race -v
 
-# Lint if golangci-lint is installed (optional)
-lint:
-	@golangci-lint version >/dev/null 2>&1 && golangci-lint run || echo "golangci-lint not installed; skipping"
-
-# Update module deps
-tidy:
-	env GOCACHE=$(GOCACHE) go mod tidy
-
-# Code generation hook - generates site and fetches dependencies
-generate: build gen-site gen-openapi fetch-redoc
-	env GOCACHE=$(GOCACHE) go generate ./...
-
-# Regenerate only swagger assets
-swagger: gen-openapi fetch-redoc
-	@echo "Swagger assets regenerated"
-
-# Generate coverage profile
 cover:
-	env GOCACHE=$(GOCACHE) go test ./... -coverprofile=coverage.out
-	@echo "wrote coverage.out"
+	$(GO_FLAGS) go test ./... -coverprofile=coverage.out
+	@echo "Coverage report written to coverage.out"
 
-# Run microbenchmarks across packages
+# Code quality targets
+fmt:
+	@if ! command -v goimports >/dev/null 2>&1; then \
+		echo "Installing goimports..."; \
+		go install golang.org/x/tools/cmd/goimports@latest; \
+	fi
+	goimports -w .
+
+vet:
+	$(GO_FLAGS) go vet ./...
+
+lint:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+	fi
+	golangci-lint run
+
+tidy:
+	$(GO_FLAGS) go mod tidy
+
+# Benchmark targets
 bench:
-	env GOCACHE=$(GOCACHE) go test ./... -bench=. -benchmem -run ^$$
+	$(GO_FLAGS) go test ./... -bench=. -benchmem -run ^$$
 
-# Run comprehensive repository benchmarks (30M talents)
 bench-repo:
-	env GOCACHE=$(GOCACHE) ./scripts/run_benchmarks.sh
+	$(GO_FLAGS) go test -bench="BenchmarkTreapStore" -benchmem ./internal/adapters/repository/...
 
-# Run individual repository benchmarks
-bench-repo-heavy:
-	env GOCACHE=$(GOCACHE) go test -bench="BenchmarkTreapStore_30MTalents_HeavyLoad" -benchmem -benchtime=10m ./internal/adapters/repository/...
+# Generation targets
+generate: build
+	./$(BINARY_PATH) -cmd=gen-site
+	./$(BINARY_PATH) -cmd=gen-openapi
+	./$(BINARY_PATH) -cmd=fetch-redoc
+	$(GO_FLAGS) go generate ./...
 
-bench-repo-write:
-	env GOCACHE=$(GOCACHE) go test -bench="BenchmarkTreapStore_30MTalents_WriteHeavy" -benchmem -benchtime=5m ./internal/adapters/repository/...
 
-bench-repo-read:
-	env GOCACHE=$(GOCACHE) go test -bench="BenchmarkTreapStore_30MTalents_ReadHeavy" -benchmem -benchtime=5m ./internal/adapters/repository/...
+# Utility targets
+clean:
+	rm -rf bin/ .gocache/
 
-bench-repo-snapshot:
-	env GOCACHE=$(GOCACHE) go test -bench="BenchmarkTreapStore_30MTalents_SnapshotImpact" -benchmem -benchtime=5m ./internal/adapters/repository/...
-
-# Docker targets
-docker-setup:
-	./deployments/docker-setup.sh
-
-docker-build:
-	docker compose build
-
-docker-run:
-	docker compose up -d
-
-docker-stop:
-	docker compose down
-
-docker-clean:
-	docker compose down -v --remove-orphans
-	docker system prune -f
-
-docker-logs:
-	docker compose logs -f
-
-docker-restart:
-	docker compose restart
-
-# Stress testing targets
-stress-test:
-	./scripts/run_stress_tests.sh
-
-# Show common targets
 help:
-	@echo "make build        - build the binary"
-	@echo "make run          - build then run server (opens dashboard in browser)"
-	@echo "make run-simple   - build then run server (no browser)"
-	@echo "make gen-site     - generate documentation site"
-	@echo "make gen-openapi  - copy OpenAPI spec to swagger package"
-	@echo "make fetch-redoc  - fetch ReDoc JavaScript bundle"
-	@echo "make test         - run tests"
-	@echo "make race         - run tests with race detector"
-	@echo "make fmt          - format code"
-	@echo "make vet          - static analysis"
-	@echo "make lint         - run golangci-lint if available"
-	@echo "make tidy         - update go.mod/go.sum"
-	@echo "make clean        - remove build artifacts"
-	@echo "make cover        - generate coverage profile"
-	@echo "make bench        - run benchmarks"
-	@echo "make bench-repo   - run comprehensive repository benchmarks (30M talents)"
-	@echo "make bench-repo-* - run individual repository benchmarks"
-	@echo "make stress-test  - run comprehensive stress tests"
-	@echo "make swagger      - regenerate swagger assets"
+	@echo "Available targets:"
 	@echo ""
-	@echo "Docker targets:"
-	@echo "make docker-setup - check Docker prerequisites"
-	@echo "make docker-build - build Docker images"
-	@echo "make docker-run   - start services"
-	@echo "make docker-stop  - stop services"
-	@echo "make docker-clean - stop and clean up volumes"
-	@echo "make docker-logs  - show service logs"
-	@echo "make docker-restart - restart services"
+	@echo "Build & Run:"
+	@echo "  build      - build the binary"
+	@echo "  run        - build and run the server"
+	@echo "  run-dev    - run with development settings"
+	@echo "  run-prod   - run with production settings"
 	@echo ""
-	@echo "Testing targets:"
-	@echo "make stress-test   - run comprehensive stress tests"
+	@echo "Testing:"
+	@echo "  test       - run all tests"
+	@echo "  test-race  - run tests with race detector"
+	@echo "  cover      - generate coverage report"
+	@echo "  bench      - run benchmarks"
+	@echo "  bench-repo - run repository benchmarks"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  fmt        - format code and organize imports"
+	@echo "  vet        - run go vet"
+	@echo "  lint       - run golangci-lint"
+	@echo "  tidy       - update dependencies"
+	@echo ""
+	@echo "Generation:"
+	@echo "  generate   - generate all assets"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  clean      - remove build artifacts"
+	@echo "  help       - show this help"

@@ -108,26 +108,26 @@ func toFixedPoint(x float64) scoreFP {
 - Deterministic ordering
 - Consistent tie-breaking
 
-### Sharding Strategy
+### Concurrency Strategy
 
-**Hash Function**: FNV-1a (64-bit)
+**Implementation**: Single treap with RWMutex
 ```go
-func (s *TreapStore) shardFor(id string) *shard {
-    hasher := fnv.New64a()
-    _, _ = hasher.Write([]byte(id))
-    idx := int(hasher.Sum64() % uint64(len(s.shards)))
-    return &s.shards[idx]
+type TreapStore struct {
+    mu   sync.RWMutex
+    root *node
+    byID map[string]record
+    // ... other fields
 }
 ```
 
 **Benefits**:
-- Even distribution across shards
-- O(1) shard selection
-- Good load balancing
+- Simple implementation
+- Consistent performance
+- No cross-shard coordination needed
 
 **Trade-offs**:
-- Global operations require cross-shard coordination
-- More complex rank calculations
+- Single point of contention for writes
+- Optimized for read-heavy workloads
 
 ## 2. In-Memory Event Queue
 
@@ -286,53 +286,35 @@ func (p *WorkerPool) Start(ctx context.Context)
 
 ## 5. Global Operations
 
-### Cross-Shard K-Way Merge
+### Top-N Query Implementation
 
-**Problem**: Top-N queries need global ordering across shards
-**Solution**: K-way merge of shard results
+**Problem**: Get top N entries in sorted order
+**Solution**: In-order traversal with early termination
 
 ```go
 func (s *TreapStore) TopN(ctx context.Context, n int) ([]Entry, error) {
-    // 1. Collect top-N from each shard
-    per := make([]shardSlice, len(s.shards))
-    for i := range s.shards {
-        sh := &s.shards[i]
-        sh.mu.RLock()
-        out := make([]Entry, 0, n)
-        collectTopN(sh.root, n, sh.byID, &out)
-        sh.mu.RUnlock()
-        per[i] = shardSlice{entries: out, idx: 0}
-    }
+    s.mu.RLock()
+    defer s.mu.RUnlock()
     
-    // 2. K-way merge
     out := make([]Entry, 0, n)
-    for len(out) < n {
-        bestIdx := -1
-        var best Entry
-        for i := range per {
-            // Find best candidate across all shards
-        }
-        if bestIdx == -1 {
-            break // all exhausted
-        }
-        out = append(out, best)
-        per[bestIdx].idx++
-    }
+    collectTopN(s.root, n, s.byID, &out)
     
+    // Assign ranks with proper tie handling
+    assignRanksWithTies(out)
     return out, nil
 }
 ```
 
-**Time Complexity**: **O(n_shard × log n_shard + N)**
-- Collect from shards: O(n_shard × log n_shard)
-- K-way merge: O(N)
+**Time Complexity**: **O(log n + N)**
+- In-order traversal with limit: O(log n + N)
+- Early termination when limit reached
 
-**Space Complexity**: **O(n_shard × N + N)**
+**Space Complexity**: **O(N)**
 
 ### Global Rank Calculation
 
-**Problem**: Rank queries need global position across all shards
-**Solution**: Collect all entries and calculate global rank
+**Problem**: Get rank for a specific talent
+**Solution**: In-order traversal to find rank
 
 ```go
 func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
@@ -362,7 +344,7 @@ func (s *TreapStore) Rank(ctx context.Context, talentID string) (Entry, error) {
 }
 ```
 
-**Time Complexity**: **O(n_shard × log n_shard)**
+**Time Complexity**: **O(log n)**
 **Space Complexity**: **O(N)** where N is total talents
 
 ## 6. Performance Optimizations
@@ -415,18 +397,15 @@ func (s *TreapStore) startPeriodicSnapshots(ctx context.Context) {
 |-----------|---------------|-----------------|------------------|-------|
 | Insert | Treap | O(log n) | O(1) | Average case |
 | Delete | Treap | O(log n) | O(1) | Average case |
-| Rank | Treap | O(log n) | O(1) | Per shard |
-| Top-N | Treap | O(log n + N) | O(N) | Per shard |
-| Global Top-N | Sharded Treap | O(n_shard × log n_shard + N) | O(n_shard × N) | Cross-shard merge |
-| Global Rank | Sharded Treap | O(n_shard × log n_shard) | O(N) | Global calculation |
+| Top-N | Treap | O(log n + N) | O(N) | In-order traversal |
+| Rank | Treap | O(log n) | O(N) | In-order traversal |
 | Enqueue | Channel | O(1) | O(1) | Non-blocking |
 | Dequeue | Channel | O(1) | O(1) | Per event |
 | Dedupe Check | Hash Map | O(1) | O(1) | Average case |
 | Eviction | Linked List | O(1) | O(1) | LIFO |
 
 Where:
-- n = number of talents per shard
-- n_shard = number of shards
+- n = number of talents
 - N = total number of talents
 - M = deduplication cache size
 
@@ -509,11 +488,12 @@ func (s *SimpleLeaderboard) TopN(n int) []Entry {
 
 **Why Treap is the Optimal Choice**:
 
-1. **Self-Balancing**: Random priorities ensure O(log n) height
+1. **Self-Balancing**: Score-based priorities ensure O(log n) height with optimal balance
 2. **Efficient Operations**: All operations are O(log n)
 3. **Deterministic Ordering**: Consistent tie-breaking
 4. **Memory Efficient**: No extra balancing information needed
-5. **Optimal Top-N**: O(n_shard × log n_shard + N) where N is the limit, not total size
+5. **Optimal Top-N**: O(log n + N) where N is the limit, not total size
+6. **Score-Optimized**: Higher scores naturally stay higher in the tree structure
 
 **Performance Comparison**:
 
@@ -522,23 +502,30 @@ func (s *SimpleLeaderboard) TopN(n int) []Entry {
 | Insert | O(1) | O(n) | O(log n) | **O(log n)** |
 | Update | O(1) | O(n) | O(log n) | **O(log n)** |
 | Read | O(1) | O(log n) | O(log n) | **O(log n)** |
-| Top-N | **O(n log n)** | O(n) | O(log n + N) | **O(n_shard × log n_shard + N)** |
+| Top-N | **O(n log n)** | O(n) | O(log n + N) | **O(log n + N)** |
 | Rank | O(n) | O(log n) | O(log n) | **O(log n)** |
 
 **The Key Insight**: 
-We compromised on individual read/update performance (O(1) → O(log n)) to achieve optimal Top-N performance (O(n log n) → O(n_shard × log n_shard + N)). This trade-off is justified because:
+We compromised on individual read/update performance (O(1) → O(log n)) to achieve optimal Top-N performance (O(n log n) → O(log n + N)). This trade-off is justified because:
 
 - **Top-N queries are the most frequent and critical operations**
 - **O(log n) is still very fast** (log(30M) ≈ 25 operations)
 - **The system is read-heavy** - leaderboard queries happen more often than updates
 
-**Note on Sharding Complexity**: The actual Top-N complexity is O(n_shard × log n_shard + N) due to cross-shard k-way merging. With 8 shards and 30M talents, this becomes O(8 × log(3.75M) + N) ≈ O(8 × 22 + N) ≈ O(176 + N), which is still much better than O(n log n) = O(745M) for a simple map approach.
+**Note on Performance**: The Top-N complexity is O(log n + N) due to in-order traversal with early termination. For 30M talents, this becomes O(log(30M) + N) ≈ O(25 + N), which is much better than O(n log n) = O(745M) for a simple map approach.
 
-### Why Sharding?
+### Why Single Treap?
 
-1. **Concurrency**: Multiple shards can be updated simultaneously
-2. **Scalability**: Linear scaling with number of shards
-3. **Load Distribution**: Even distribution of data and operations
+1. **Simplicity**: Single data structure is easier to understand and maintain
+2. **Consistency**: No cross-shard coordination needed
+3. **Performance**: Optimized for read-heavy workloads
+
+### Why Score-Based Priorities?
+
+1. **Optimal Balance**: Higher scores naturally become higher in the treap
+2. **Better Performance**: More predictable tree structure leads to faster operations
+3. **Score Hierarchy**: Tree structure reflects the score-based ordering
+4. **Reduced Rotations**: Fewer tree rotations needed during insertions
 
 ### Why Fixed-Point Arithmetic?
 

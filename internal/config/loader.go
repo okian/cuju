@@ -19,7 +19,7 @@ import (
 //  3. env (prefix CUJU_)
 func Load(ctx context.Context) (*Config, error) {
 	// Start with defaults
-	base := New(ctx)
+	base := New()
 
 	k := koanf.New(".")
 

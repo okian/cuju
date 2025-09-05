@@ -55,7 +55,6 @@ type Service struct {
 	workerCount   int
 	queueSize     int
 	dedupeSize    int
-	shardCount    int
 	skillWeights  map[string]float64
 	defaultWeight float64
 	// Scoring latency configuration
@@ -100,15 +99,6 @@ func WithDedupeSize(size int) Option {
 	}
 }
 
-// WithShardCount sets the number of shards for the leaderboard store.
-func WithShardCount(count int) Option {
-	return func(s *Service) {
-		if count > 0 {
-			s.shardCount = count
-		}
-	}
-}
-
 // WithLogger sets a custom logger for the service.
 func WithLogger(logger logger.Logger) Option {
 	return func(s *Service) {
@@ -148,7 +138,6 @@ func New(opts ...Option) *Service {
 		workerCount: runtime.NumCPU() * 2, // Default to 2x CPU cores
 		queueSize:   100000,               // Default queue size
 		dedupeSize:  50000,                // Default dedupe cache size
-		shardCount:  4,                    // Default shard count
 		skillWeights: map[string]float64{
 			"coding": 1.0,
 		},
@@ -184,9 +173,8 @@ func (s *Service) Start(ctx context.Context) error {
 	s.logger.Info(ctx, "starting leaderboard service...")
 
 	// Initialize components
-	s.leaderboard = repository.NewTreapStore(ctx,
-		repository.WithShardCount(s.shardCount),
-	)
+	s.leaderboard = repository.NewTreapStore(ctx)
+	s.logger.Info(ctx, "using treap store")
 	s.deduper = dedupe.NewInMemoryDeduper(
 		dedupe.WithMaxSize(s.dedupeSize),
 	)
@@ -209,7 +197,6 @@ func (s *Service) Start(ctx context.Context) error {
 		logger.Int("workers", s.workerCount),
 		logger.Int("queueSize", s.queueSize),
 		logger.Int("dedupeSize", s.dedupeSize),
-		logger.Int("shardCount", s.shardCount),
 	)
 
 	return nil
@@ -234,13 +221,13 @@ func (s *Service) Stop() {
 	// Close leaderboard store
 	if s.leaderboard != nil {
 		if closer, ok := s.leaderboard.(interface{ Close() error }); ok {
-			closer.Close()
+			_ = closer.Close()
 		}
 	}
 
 	// Close queue
 	if q, ok := s.eventQueue.(*eventqueue.InMemoryQueue); ok {
-		q.Close()
+		_ = q.Close()
 	}
 
 	// Signal cleanup loop to stop

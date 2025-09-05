@@ -95,7 +95,7 @@ func TestServer_Register(t *testing.T) {
 			lb:     &mockLeaderboard{},
 		}
 		statsProvider := &mockStatsProvider{}
-		server := api.NewServer(deps, statsProvider, 100)
+		server := api.NewServer(deps, statsProvider)
 		mux := http.NewServeMux()
 
 		Convey("When registering routes", func() {
@@ -436,7 +436,7 @@ func TestLeaderboardHandler_HandleGetLeaderboard(t *testing.T) {
 			queue:  &mockQueue{enqueueSuccess: true},
 			lb:     mockLB,
 		}
-		handler := api.NewLeaderboardHandler(deps, 100)
+		handler := api.NewLeaderboardHandler(deps)
 
 		Convey("When requesting top N entries", func() {
 			req := httptest.NewRequest("GET", "/leaderboard?limit=2", nil)

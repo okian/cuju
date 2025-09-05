@@ -52,7 +52,7 @@ go build -buildvcs=false -o bin/test-events ./cmd/test-events
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-url` | `http://localhost:9080` | Base URL of the service |
-| `-events` | `100000` | Number of events to generate and submit |
+| `-events` | `10000` | Number of events to generate and submit |
 | `-top` | `50` | Number of top entries to fetch from leaderboard |
 | `-workers` | `CPU cores * 2` | Number of concurrent workers |
 | `-timeout` | `30s` | HTTP request timeout |
@@ -68,7 +68,7 @@ go build -buildvcs=false -o bin/test-events ./cmd/test-events
 ./bin/test-events -events 1000 -workers 4
 
 # Stress test with maximum concurrency
-./bin/test-events -events 100000 -workers 32 -timeout 60s
+./bin/test-events -events 10000 -workers 32 -timeout 60s
 
 # Test against remote service
 ./bin/test-events -url https://api.example.com -events 50000
@@ -112,7 +112,7 @@ The log files contain:
 2025/09/04 16:32:12.500975 🚀 Starting Cuju Event Test
 📊 Configuration:
    Base URL: http://localhost:9080
-   Events: 100000
+   Events: 10000
    Workers: 16
    Timeout: 30s
    Top N: 50
@@ -121,11 +121,11 @@ The log files contain:
 
 2025/09/04 16:32:12.500996 🔍 Checking service health...
 2025/09/04 16:32:12.504911 ✅ Service is healthy
-2025/09/04 16:32:12.504912 🎲 Generating 100000 events with unique talent IDs...
-2025/09/04 16:32:12.504913 ✅ Generated 100000 events successfully
-2025/09/04 16:32:12.504914 📤 Submitting 100000 events with 16 workers...
-📤 Submitted: 183046/100000 (success: 72915, duplicate: 0, failed: 110131)
-📤 Submitted: 250000/100000 (success: 150000, duplicate: 0, failed: 100000)
+2025/09/04 16:32:12.504912 🎲 Generating 10000 events with unique talent IDs...
+2025/09/04 16:32:12.504913 ✅ Generated 10000 events successfully
+2025/09/04 16:32:12.504914 📤 Submitting 10000 events with 16 workers...
+📤 Submitted: 1830/10000 (success: 729, duplicate: 0, failed: 1101)
+📤 Submitted: 2500/10000 (success: 1500, duplicate: 0, failed: 1000)
 ...
 ```
 

@@ -17,12 +17,9 @@ export CUJU_CONFIG=./config.yaml
 | Endpoint | Method | Purpose | Time Complexity |
 |----------|--------|---------|-----------------|
 | `/events` | POST | Submit performance event | O(1) |
-| `/leaderboard?limit=N` | GET | Get top N leaderboard | O(n_shard × log n_shard + N) |
-| `/rank/{talent_id}` | GET | Get talent rank | O(n_shard × log n_shard) |
+| `/leaderboard?limit=N` | GET | Get top N leaderboard | O(log n + N) |
+| `/rank/{talent_id}` | GET | Get talent rank | O(log n) |
 | `/healthz` | GET | Health check | O(1) |
-| `/stats` | GET | Service statistics | O(1) |
-| `/dashboard` | GET | Web dashboard | O(1) |
-| `/metrics` | GET | Prometheus metrics | O(1) |
 
 ## 🔧 Configuration
 
@@ -33,8 +30,6 @@ addr: ":9080"
 queue_size: 100000
 worker_count: 16
 dedupe_size: 500000
-shard_count: 8
-max_leaderboard_limit: 100
 scoring_latency_min_ms: 80
 scoring_latency_max_ms: 150
 skill_weights:
@@ -94,21 +89,20 @@ curl "http://localhost:9080/rank/t1"
 | Operation | Time Complexity | Space Complexity | Notes |
 |-----------|----------------|------------------|-------|
 | Event Submission | O(1) | O(1) | Hash map + channel |
-| Leaderboard Query | O(n_shard × log n_shard + N) | O(N) | K-way merge |
-| Rank Lookup | O(n_shard × log n_shard) | O(1) | Global calculation |
-| Update Best | O(log n_shard) | O(1) | Treap operation |
+| Leaderboard Query | O(log n + N) | O(N) | In-order traversal |
+| Rank Lookup | O(log n) | O(1) | In-order traversal |
+| Update Best | O(log n) | O(1) | Treap operation |
 | Deduplication | O(1) | O(M) | Hash map lookup |
 
 Where:
 - N = number of talents
-- n_shard = average talents per shard
 - M = deduplication cache size
 
 ## 🎯 Key Features
 
 - ✅ **Idempotent Processing** - Duplicate events are detected and ignored
 - ✅ **Asynchronous Scoring** - Events processed in background workers
-- ✅ **Sharded Storage** - Data distributed for concurrent access
+- ✅ **High-Performance Storage** - Optimized treap-based storage
 - ✅ **Real-time Metrics** - Comprehensive Prometheus monitoring
 - ✅ **High Performance** - Sub-40ms read latencies
 - ✅ **Graceful Shutdown** - Clean resource cleanup
@@ -155,13 +149,13 @@ go test -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
    - Monitor with `/stats` endpoint
 
 3. **Slow Read Performance**
-   - Increase `shard_count` for better concurrency
+   - Optimize worker count for better throughput
    - Check metrics at `/metrics`
 
 ### Performance Tuning
 
 - **High Write Load**: Increase `worker_count` and `queue_size`
-- **High Read Load**: Increase `shard_count` and `max_leaderboard_limit`
+- **High Read Load**: Optimize snapshot interval for better performance
 - **Memory Constraints**: Reduce `dedupe_size` and `queue_size`
 
 ## 🔄 Development Workflow
@@ -192,4 +186,4 @@ go test ./...
 2. **Simplicity** - Clean, maintainable code structure
 3. **Observability** - Comprehensive monitoring and metrics
 4. **Reliability** - Idempotent processing and error handling
-5. **Scalability** - Sharded architecture for concurrent access
+5. **Scalability** - Optimized treap architecture for high performance

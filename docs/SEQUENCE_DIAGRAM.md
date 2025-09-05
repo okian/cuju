@@ -63,7 +63,7 @@ sequenceDiagram
     HTTP API->>Service: TopN(N)
     Service->>Repository: TopN(N)
     
-    Note over Repository: Cross-Shard K-Way Merge<br/>O(n_shard × log n_shard + N)
+    Note over Repository: Treap Top-N Query<br/>O(log n + N)
     
     Repository-->>Service: Leaderboard Entries<br/>[{rank, talent_id, score}, ...]
     Service-->>HTTP API: Entries
@@ -108,8 +108,8 @@ sequenceDiagram
 6. **Metrics**: All operations are tracked for monitoring
 
 ### 2. Read Operations
-1. **Leaderboard**: Cross-shard k-way merge for global top-N
-2. **Rank Lookup**: Global rank calculation across all shards
+1. **Leaderboard**: Treap-based top-N query with in-order traversal
+2. **Rank Lookup**: Single treap rank calculation
 3. **Caching**: Periodic snapshots provide fast access to top entries
 
 ### 3. Error Handling
@@ -120,8 +120,8 @@ sequenceDiagram
 
 ### 4. Performance Characteristics
 - **Event Submission**: O(1) - Hash map lookup + channel send
-- **Leaderboard Query**: O(n_shard × log n_shard + N) - K-way merge
-- **Rank Lookup**: O(n_shard × log n_shard) - Global rank calculation
+- **Leaderboard Query**: O(log n + N) - Treap in-order traversal
+- **Rank Lookup**: O(log n) - Single treap rank calculation
 - **Health Check**: O(1) - Simple status check
 
 ## Data Flow Summary
@@ -131,7 +131,7 @@ Client Request → HTTP API → Service → Components → Response
      ↓              ↓         ↓          ↓           ↓
   JSON Event → Validation → Dedupe → Queue → 202 Accepted
      ↓              ↓         ↓          ↓           ↓
-  Read Query → Service → Repository → Shards → JSON Response
+  Read Query → Service → Repository → Treap → JSON Response
      ↓              ↓         ↓          ↓           ↓
   Health Check → Service → Status → Metrics → 200 OK
 ```

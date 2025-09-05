@@ -42,7 +42,6 @@ type StressTestConfig struct {
 	ConcurrentWorkers int
 	TestDuration      time.Duration
 	SnapshotInterval  time.Duration
-	ShardCount        int
 	TopCacheSize      int
 	EnableMetrics     bool
 
@@ -64,7 +63,6 @@ func DefaultStressTestConfig() *StressTestConfig {
 		ConcurrentWorkers: 2000,             // High concurrency to create real pressure
 		TestDuration:      15 * time.Minute, // Longer duration for stable metrics
 		SnapshotInterval:  1 * time.Second,
-		ShardCount:        16,
 		TopCacheSize:      10000,
 		EnableMetrics:     true,
 
@@ -91,11 +89,14 @@ func ComprehensiveStressTest(b *testing.B, config *StressTestConfig) {
 
 	// Create store with configuration
 	store := NewTreapStore(ctx,
-		WithShardCount(config.ShardCount),
 		WithSnapshotInterval(config.SnapshotInterval),
 		WithTopCacheSize(config.TopCacheSize),
 	)
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			b.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	// Pre-populate with 30M talents with realistic score distribution
 	b.Logf("Pre-populating store with %d talents...", config.TotalTalents)
@@ -179,7 +180,7 @@ func populateStoreRealistic(ctx context.Context, store *TreapStore, count int) {
 						score = 1000
 					}
 
-					store.UpdateBest(ctx, talentID, score)
+					_, _ = store.UpdateBest(ctx, talentID, score)
 				}
 			}
 		}(i)
@@ -382,7 +383,6 @@ func generateComprehensiveReport(b *testing.B, apiPerf *APIPerformance, config *
 	b.Logf("Configuration:")
 	b.Logf("  Total Talents: %d", config.TotalTalents)
 	b.Logf("  Concurrent Workers: %d", config.ConcurrentWorkers)
-	b.Logf("  Shard Count: %d", config.ShardCount)
 	b.Logf("  Snapshot Interval: %v", config.SnapshotInterval)
 	b.Logf("  Top Cache Size: %d", config.TopCacheSize)
 	b.Logf("  Test Duration: %v", config.TestDuration)

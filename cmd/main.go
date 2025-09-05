@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/okian/cuju/internal/adapters/http/api"
-	"github.com/okian/cuju/internal/adapters/http/site"
 	"github.com/okian/cuju/internal/adapters/http/swagger"
 	app "github.com/okian/cuju/internal/app"
 	"github.com/okian/cuju/internal/config"
@@ -31,7 +30,11 @@ func main() {
 	if err := logger.Init(); err != nil {
 		log.Fatalf("failed to initialize logging: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			logger.Error(err)
+		}
+	}()
 
 	log := logger.Get()
 
@@ -57,7 +60,6 @@ func main() {
 		app.WithWorkerCount(cfg.WorkerCount),
 		app.WithQueueSize(cfg.EventQueueSize),
 		app.WithDedupeSize(cfg.DedupeSize),
-		app.WithShardCount(cfg.ShardCount),
 		app.WithSkillWeights(cfg.SkillWeights),
 		app.WithDefaultSkillWeight(cfg.DefaultSkillWeight),
 		app.WithScoringLatencyRange(time.Duration(cfg.ScoringLatencyMinMS)*time.Millisecond, time.Duration(cfg.ScoringLatencyMaxMS)*time.Millisecond),
@@ -76,14 +78,11 @@ func main() {
 	// HTTP mux and routes.
 	mux := http.NewServeMux()
 
-	// Register embedded documentation site at root (/)
-	site.Register(ctx, mux)
-
 	// Register Swagger UI under /swagger
 	swagger.Register(ctx, mux)
 
 	// Register business API routes with the service dependency.
-	apiServer := api.NewServer(svc, svc, cfg.MaxLeaderboardLimit)
+	apiServer := api.NewServer(svc, svc)
 	apiServer.Register(ctx, mux, svc)
 
 	srv := &http.Server{

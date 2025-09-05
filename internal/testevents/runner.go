@@ -90,7 +90,11 @@ func checkServiceHealth(ctx context.Context, config *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to service: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}()
 
 	// Accept any 200 response as healthy (the service returns Prometheus metrics)
 	if resp.StatusCode != 200 {
@@ -127,7 +131,11 @@ func saveEventsToFile(ctx context.Context, config *Config, events []Event) error
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("failed to close file: %v", err)
+		}
+	}()
 
 	// Write JSON array
 	if _, err := file.WriteString("[\n"); err != nil {
@@ -150,7 +158,7 @@ func saveEventsToFile(ctx context.Context, config *Config, events []Event) error
 				return fmt.Errorf("failed to write comma: %w", err)
 			}
 		}
-		file.WriteString("\n")
+		_, _ = file.WriteString("\n")
 	}
 
 	if _, err := file.WriteString("]\n"); err != nil {

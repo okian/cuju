@@ -3,82 +3,13 @@ package swagger
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 )
-
-// Error represents a swagger-related error
-type Error struct {
-	Op   string
-	Kind error
-	Err  error
-}
-
-// Error implements the error interface
-func (e *Error) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
-
-	if e.Op != "" && e.Kind != nil && e.Err != nil {
-		return fmt.Sprintf("%s: %s: %s", e.Op, e.Kind.Error(), e.Err.Error())
-	}
-	if e.Op != "" && e.Kind != nil {
-		return fmt.Sprintf("%s: %s", e.Op, e.Kind.Error())
-	}
-	if e.Op != "" && e.Err != nil {
-		return fmt.Sprintf("%s: %s", e.Op, e.Err.Error())
-	}
-	if e.Kind != nil {
-		return e.Kind.Error()
-	}
-	if e.Err != nil {
-		return e.Err.Error()
-	}
-	return "unknown error"
-}
-
-// Unwrap returns the underlying error
-func (e *Error) Unwrap() error {
-	return e.Err
-}
-
-// Is checks if the error matches the target
-func (e *Error) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-	if e.Kind == target {
-		return true
-	}
-	if e.Err == target {
-		return true
-	}
-	return errors.Is(e.Err, target)
-}
 
 // Error constants
 var (
 	ErrServe = errors.New("swagger serve failed")
 )
-
-// Wrap wraps an error with operation context
-func Wrap(op string, err error) error {
-	if err == nil {
-		return nil
-	}
-	return &Error{Op: op, Err: err}
-}
-
-// WrapKind wraps an error with operation and kind context
-func WrapKind(op string, kind error, err error) error {
-	return &Error{Op: op, Kind: kind, Err: err}
-}
-
-// NewKind creates a new error with operation and kind
-func NewKind(op string, kind error) error {
-	return &Error{Op: op, Kind: kind}
-}
 
 // Register attaches Swagger UI and the OpenAPI spec routes to mux.
 // Routes:

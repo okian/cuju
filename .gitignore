@@ -33,6 +33,9 @@ cover.out
 internal/swagger/openapi.yaml
 internal/site/static/
 
+# Generated test events
+generated_events_*.json
+
 # Node/npm (if present in docs tooling)
 node_modules/
 

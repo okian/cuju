@@ -32,7 +32,6 @@ func TestService_New(t *testing.T) {
 			service.WithWorkerCount(8),
 			service.WithQueueSize(50_000),
 			service.WithDedupeSize(25_000),
-			service.WithShardCount(2),
 		)
 
 		Convey("Then it should be created successfully", func() {

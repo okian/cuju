@@ -127,7 +127,11 @@ func retrieveSingleRanking(ctx context.Context, client *HTTPClient, baseURL, tal
 	if err != nil {
 		return Entry{}, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != 200 {
 		body, _ := readResponseBody(resp)
@@ -158,7 +162,11 @@ func getLeaderboard(ctx context.Context, config *Config, stats *Stats) ([]Entry,
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("failed to close response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != 200 {
 		body, _ := readResponseBody(resp)

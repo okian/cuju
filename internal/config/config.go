@@ -8,7 +8,6 @@
 package config
 
 import (
-	"context"
 	"runtime"
 )
 
@@ -29,12 +28,6 @@ type Config struct {
 	// DedupeSize sets the size of the deduplication cache.
 	DedupeSize int `koanf:"dedupe_size"`
 
-	// ShardCount configures the number of shards in the leaderboard store.
-	ShardCount int `koanf:"shard_count"`
-
-	// MaxLeaderboardLimit caps GET /leaderboard?limit.
-	MaxLeaderboardLimit int `koanf:"max_leaderboard_limit"`
-
 	// ScoringLatencyMinMS and ScoringLatencyMaxMS simulate external ML latency bounds.
 	ScoringLatencyMinMS int `koanf:"scoring_latency_min_ms"`
 	ScoringLatencyMaxMS int `koanf:"scoring_latency_max_ms"`
@@ -49,15 +42,13 @@ type Config struct {
 // New creates a Config using provided options. Context is accepted first to
 // satisfy the project-wide convention; it is reserved for future use (e.g.,
 // loading from env/files) and is currently unused.
-func New(_ context.Context) *Config {
+func New() *Config {
 	c := &Config{
 		LogLevel:            "info",
 		Addr:                ":9080",
-		EventQueueSize:      100_000,
-		WorkerCount:         runtime.NumCPU() * 10,
+		EventQueueSize:      200_000,
+		WorkerCount:         runtime.NumCPU() * 20,
 		DedupeSize:          500_000,
-		ShardCount:          8,
-		MaxLeaderboardLimit: 100,
 		ScoringLatencyMinMS: 80,
 		ScoringLatencyMaxMS: 150,
 		SkillWeights: map[string]float64{

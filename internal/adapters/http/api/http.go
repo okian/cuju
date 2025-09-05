@@ -40,12 +40,12 @@ type Server struct {
 }
 
 // NewServer creates a new API server with all handlers
-func NewServer(deps Dependencies, statsProvider StatsProvider, maxLeaderboardLimit int) *Server {
+func NewServer(deps Dependencies, statsProvider StatsProvider) *Server {
 	return &Server{
 		healthHandler:      NewHealthHandler(),
 		statsHandler:       NewStatsHandler(statsProvider),
 		eventsHandler:      NewEventsHandler(deps),
-		leaderboardHandler: NewLeaderboardHandler(deps, maxLeaderboardLimit),
+		leaderboardHandler: NewLeaderboardHandler(deps),
 		rankHandler:        NewRankHandler(deps),
 		dashboardHandler:   newdashboardHandler(),
 	}
@@ -55,7 +55,6 @@ func NewServer(deps Dependencies, statsProvider StatsProvider, maxLeaderboardLim
 func (s *Server) Register(ctx context.Context, mux *http.ServeMux, deps Dependencies) {
 	// Specific paths first (most specific to least specific)
 	mux.HandleFunc("/healthz", MetricsMiddleware(s.healthHandler.HandleHealth, "healthz"))
-
 	mux.HandleFunc("/dashboard", s.dashboardHandler.HandleDashboard)
 	mux.HandleFunc("/stats", MetricsMiddleware(s.statsHandler.HandleStats, "stats"))
 	mux.HandleFunc("/events", MetricsMiddleware(s.eventsHandler.HandlePostEvent, "events"))
