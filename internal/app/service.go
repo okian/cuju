@@ -288,14 +288,8 @@ func (s *Service) Enqueue(ctx context.Context, e any) bool {
 				eventID = fmt.Sprintf("%s_%s_%f", talentID, skill, rawMetric)
 			}
 
-			// Check for duplicates before enqueueing
-			if s.SeenAndRecord(ctx, eventID) {
-				s.logger.Debug(ctx, "duplicate event detected, skipping",
-					logger.String("eventID", eventID),
-					logger.String("talentID", talentID),
-				)
-				return true // Return true to indicate "processed" (as duplicate)
-			}
+			// Note: Duplicate checking is handled by the HTTP API layer
+			// Events reaching this point have already been validated for duplicates
 
 			workerEvent := model.Event{
 				EventID:   eventID,
