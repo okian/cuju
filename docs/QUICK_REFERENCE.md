@@ -19,7 +19,10 @@ export CUJU_CONFIG=./config.yaml
 | `/events` | POST | Submit performance event | O(1) |
 | `/leaderboard?limit=N` | GET | Get top N leaderboard | O(log n + N) |
 | `/rank/{talent_id}` | GET | Get talent rank | O(log n) |
-| `/healthz` | GET | Health check | O(1) |
+| `/healthz` | GET | Health check (Prometheus metrics) | O(1) |
+| `/stats` | GET | Service statistics | O(1) |
+| `/dashboard` | GET | Web monitoring dashboard | O(1) |
+| `/api-docs` | GET | Interactive API documentation | O(1) |
 
 ## 🔧 Configuration
 
@@ -110,8 +113,9 @@ Where:
 ## 🔍 Monitoring
 
 - **Health Check**: `GET /healthz` (Prometheus metrics)
-- **Dashboard**: `GET /dashboard` (Web UI)
+- **Dashboard**: `GET /dashboard` (Web UI with real-time metrics)
 - **Stats**: `GET /stats` (JSON statistics)
+- **API Documentation**: `GET /api-docs` (Interactive Swagger UI)
 
 ## 🧪 Testing
 

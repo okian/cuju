@@ -102,6 +102,9 @@ sequenceDiagram
 
     Client->>HTTP API: GET /dashboard
     HTTP API-->>Client: 200 OK<br/>HTML Dashboard with Real-time Metrics
+
+    Client->>HTTP API: GET /api-docs
+    HTTP API-->>Client: 200 OK<br/>HTML with Interactive Swagger UI
 ```
 
 ## Key Components Interaction

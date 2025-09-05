@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"os"
 	"runtime"
 	"time"
 
@@ -40,7 +40,8 @@ func main() {
 
 	// Setup logging
 	if err := testevents.SetupLogging(*logFile); err != nil {
-		log.Fatalf("Failed to setup logging: %v", err)
+		os.Stderr.WriteString("Failed to setup logging: " + err.Error() + "\n")
+		return
 	}
 
 	// Create context with timeout
@@ -61,6 +62,7 @@ func main() {
 
 	// Run the test
 	if err := testevents.Run(ctx, config); err != nil {
-		log.Fatalf("Test failed: %v", err)
+		os.Stderr.WriteString("Test failed: " + err.Error() + "\n")
+		return
 	}
 }

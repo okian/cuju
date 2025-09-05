@@ -6,11 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/okian/cuju/pkg/logger"
+)
+
+// Constants for event submission results.
+const (
+	ResultSuccess   = "success"
+	ResultDuplicate = "duplicate"
+	ResultFailed    = "failed"
 )
 
 // HTTPClient wraps http.Client with timeout.
@@ -29,50 +37,73 @@ func newHTTPClient(timeout time.Duration) *HTTPClient {
 	}
 }
 
-// Get performs a GET request.
-func (c *HTTPClient) Get(url string) (*http.Response, error) {
-	return c.client.Get(url)
+// Get performs a GET request with context.
+func (c *HTTPClient) Get(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
+	}
+	return resp, nil
 }
 
-// Post performs a POST request with JSON body.
-func (c *HTTPClient) Post(url string, body interface{}) (*http.Response, error) {
+// Post performs a POST request with JSON body and context.
+func (c *HTTPClient) Post(ctx context.Context, url string, body interface{}) (*http.Response, error) {
 	jsonData, err := marshalJSON(body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	return c.client.Do(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
+	}
+	return resp, nil
 }
 
 // marshalJSON marshals a struct to JSON.
 func marshalJSON(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	return data, nil
 }
 
 // unmarshalJSON unmarshals JSON to a struct.
 func unmarshalJSON(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
+	if err := json.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+	return nil
 }
 
 // readResponseBody reads and closes the response body.
 func readResponseBody(resp *http.Response) ([]byte, error) {
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Printf("failed to close response body: %v", err)
+			logger.Get().Error(context.Background(), "failed to close response body", logger.Error(err))
 		}
 	}()
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	return data, nil
 }
 
 // submitEvents submits events concurrently using worker pools.
-func submitEvents(ctx context.Context, config *Config, events []Event, stats *Stats) error {
-	log.Printf("📤 Submitting %d events with %d workers...", len(events), config.Workers)
+func submitEvents(ctx context.Context, config *Config, events []Event, stats *Stats) error { //nolint:gocognit,unparam // complex function required for concurrent event submission, error return for consistency
+	logger.Get().Info(ctx, "submitting events", logger.Int("events", len(events)), logger.Int("workers", config.Workers))
 
 	client := newHTTPClient(config.Timeout)
 	url := config.BaseURL + "/events"
@@ -96,7 +127,7 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 	// Start workers
 	for i := 0; i < config.Workers; i++ {
 		wg.Add(1)
-		go func(workerID int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			for event := range eventChan {
@@ -109,11 +140,11 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 					// Update counters
 					atomic.AddInt64(&submitted, 1)
 					switch result {
-					case "success":
+					case ResultSuccess:
 						atomic.AddInt64(&successful, 1)
-					case "duplicate":
+					case ResultDuplicate:
 						atomic.AddInt64(&duplicate, 1)
-					case "failed":
+					case ResultFailed:
 						atomic.AddInt64(&failed, 1)
 					}
 
@@ -126,11 +157,19 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 						fail := atomic.LoadInt64(&failed)
 
 						if config.Verbose {
-							log.Printf("📊 Progress: %d/%d submitted (success: %d, duplicate: %d, failed: %d)",
-								total, len(events), succ, dup, fail)
+							logger.Get().Info(ctx, "progress update",
+								logger.Int("total", int(total)),
+								logger.Int("events", len(events)),
+								logger.Int("success", int(succ)),
+								logger.Int("duplicate", int(dup)),
+								logger.Int("failed", int(fail)))
 						} else {
-							log.Printf("\r📤 Submitted: %d/%d (success: %d, duplicate: %d, failed: %d)",
-								total, len(events), succ, dup, fail)
+							logger.Get().Info(ctx, "submission progress",
+								logger.Int("total", int(total)),
+								logger.Int("events", len(events)),
+								logger.Int("success", int(succ)),
+								logger.Int("duplicate", int(dup)),
+								logger.Int("failed", int(fail)))
 						}
 					}
 				}
@@ -155,7 +194,7 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 
 	// Final progress report
 	if !config.Verbose {
-		log.Println() // New line after progress indicator
+		logger.Get().Info(ctx, "progress indicator complete")
 	}
 
 	// Update stats
@@ -164,31 +203,30 @@ func submitEvents(ctx context.Context, config *Config, events []Event, stats *St
 	stats.EventsDuplicate = int(atomic.LoadInt64(&duplicate))
 	stats.EventsFailed = int(atomic.LoadInt64(&failed))
 
-	log.Printf(`✅ Event submission completed:
-   Successful: %d
-   Duplicate: %d
-   Failed: %d
-`, stats.EventsSuccessful, stats.EventsDuplicate, stats.EventsFailed)
+	logger.Get().Info(ctx, "event submission completed",
+		logger.Int("successful", stats.EventsSuccessful),
+		logger.Int("duplicate", stats.EventsDuplicate),
+		logger.Int("failed", stats.EventsFailed))
 
 	return nil
 }
 
 // submitSingleEvent submits a single event and returns the result.
-func submitSingleEvent(_ context.Context, client *HTTPClient, url string, event Event) string {
-	resp, err := client.Post(url, event)
+func submitSingleEvent(ctx context.Context, client *HTTPClient, url string, event Event) string {
+	resp, err := client.Post(ctx, url, event)
 	if err != nil {
-		return "failed"
+		return ResultFailed
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Printf("failed to close response body: %v", err)
+			logger.Get().Error(context.Background(), "failed to close response body", logger.Error(err))
 		}
 	}()
 
 	// Read response body
 	body, err := readResponseBody(resp)
 	if err != nil {
-		return "failed"
+		return ResultFailed
 	}
 
 	// Parse response based on status code
@@ -209,6 +247,6 @@ func submitSingleEvent(_ context.Context, client *HTTPClient, url string, event 
 		return "duplicate" // Assume duplicate for 200 even if parsing fails
 	default:
 		// Error
-		return "failed"
+		return ResultFailed
 	}
 }

@@ -361,6 +361,13 @@ sequenceDiagram
 
 **Time Complexity**: **O(1)**
 
+### 8. GET /api-docs
+**Purpose**: Interactive API documentation (Swagger UI)
+
+**Response**: HTML page with ReDoc interface for API exploration
+
+**Time Complexity**: **O(1)**
+
 ## Design Trade-offs
 
 ### 1. In-Memory vs Persistent Storage

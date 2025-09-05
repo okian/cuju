@@ -13,8 +13,8 @@ const (
 	defaultRefreshInterval = 10 * time.Second
 )
 
-// MetricsManager manages all Prometheus metrics for the CUJU service.
-type MetricsManager struct {
+// Manager manages all Prometheus metrics for the CUJU service.
+type Manager struct {
 	namespace        string
 	subsystem        string
 	histogramBuckets []float64
@@ -87,19 +87,19 @@ type MetricsManager struct {
 }
 
 // Global metrics manager instance.
-var globalManager *MetricsManager
+var globalManager *Manager //nolint:gochecknoglobals // intentional global for singleton metrics manager
 
 // Custom registry to avoid default Go metrics.
-var customRegistry = prometheus.NewRegistry()
+var customRegistry = prometheus.NewRegistry() //nolint:gochecknoglobals // intentional global for metrics registry
 
 // Initialize global metrics.
-func init() {
-	globalManager = NewMetricsManager(WithPrometheusRegistry(customRegistry))
+func init() { //nolint:gochecknoinits // intentional init for global metrics setup
+	globalManager = NewManager(WithPrometheusRegistry(customRegistry))
 }
 
-// NewMetricsManager creates a new metrics manager with default configuration.
-func NewMetricsManager(opts ...Option) *MetricsManager {
-	m := &MetricsManager{
+// NewManager creates a new metrics manager with default configuration.
+func NewManager(opts ...Option) *Manager {
+	m := &Manager{
 		namespace:        "cuju",
 		subsystem:        "leaderboard",
 		histogramBuckets: prometheus.DefBuckets,
@@ -122,7 +122,7 @@ func NewMetricsManager(opts ...Option) *MetricsManager {
 }
 
 // initializeMetrics creates all the Prometheus metrics.
-func (m *MetricsManager) initializeMetrics() {
+func (m *Manager) initializeMetrics() { //nolint:funlen // long function required for comprehensive metrics initialization
 	// Ensure metrics are registered on the configured registry (custom by default)
 	auto := promauto.With(m.registry)
 	// Core Business Metrics - Focus on what drives business value

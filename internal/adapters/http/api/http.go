@@ -60,7 +60,6 @@ func (s *Server) Register(ctx context.Context, mux *http.ServeMux, deps Dependen
 	mux.HandleFunc("/events", MetricsMiddleware(s.eventsHandler.HandlePostEvent, "events"))
 	mux.HandleFunc("/leaderboard", MetricsMiddleware(s.leaderboardHandler.HandleGetLeaderboard, "leaderboard"))
 	mux.HandleFunc("/rank/", MetricsMiddleware(s.rankHandler.HandleGetRank, "rank"))
-
 }
 
 // eventRequest mirrors the OpenAPI schema for POST /events.

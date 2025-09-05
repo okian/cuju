@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
@@ -40,7 +40,9 @@ func main() {
 
 	// Initialize logging
 	if err := logger.Init(); err != nil {
-		log.Fatalf("failed to initialize logging: %v", err)
+		// Use fmt for initialization errors since logger isn't available yet
+		os.Stderr.WriteString("failed to initialize logging: " + err.Error() + "\n")
+		return
 	}
 	defer func() {
 		if err := logger.Sync(); err != nil {
@@ -48,7 +50,7 @@ func main() {
 		}
 	}()
 
-	log := logger.Get()
+	loggerInstance := logger.Get()
 
 	// Root context with cancel on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -57,18 +59,20 @@ func main() {
 	// Load configuration (defaults -> optional file -> env)
 	cfg, err := config.Load(ctx)
 	if err != nil {
-		log.Fatal(ctx, "failed to load config", logger.Error(err))
+		// Use fmt for initialization errors since logger isn't available yet
+		os.Stderr.WriteString("failed to load config: " + err.Error() + "\n")
+		return
 	}
 
 	// Apply configured log level (fallback to info on invalid input)
 	if err := logger.SetLevelString(cfg.LogLevel); err != nil {
-		log.Warn(ctx, "invalid log_level; falling back to info", logger.String("log_level", cfg.LogLevel), logger.Error(err))
+		loggerInstance.Warn(ctx, "invalid log_level; falling back to info", logger.String("log_level", cfg.LogLevel), logger.Error(err))
 		_ = logger.SetLevelString("info")
 	}
 
 	// Create and start the service with configuration options
 	svc := app.New(
-		app.WithLogger(log),
+		app.WithLogger(loggerInstance),
 		app.WithWorkerCount(cfg.WorkerCount),
 		app.WithQueueSize(cfg.EventQueueSize),
 		app.WithDedupeSize(cfg.DedupeSize),
@@ -77,7 +81,9 @@ func main() {
 		app.WithScoringLatencyRange(time.Duration(cfg.ScoringLatencyMinMS)*time.Millisecond, time.Duration(cfg.ScoringLatencyMaxMS)*time.Millisecond),
 	)
 	if err := svc.Start(ctx); err != nil {
-		log.Fatal(ctx, "failed to start service", logger.Error(err))
+		// Use fmt for initialization errors since logger isn't available yet
+		os.Stderr.WriteString("failed to start service: " + err.Error() + "\n")
+		return
 	}
 	defer svc.Stop()
 
@@ -108,25 +114,27 @@ func main() {
 
 	// Start the HTTP server
 	go func() {
-		log.Info(ctx, "starting HTTP server", logger.String("addr", cfg.Addr))
+		loggerInstance.Info(ctx, "starting HTTP server", logger.String("addr", cfg.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(ctx, "HTTP server failed", logger.Error(err))
+			// Use fmt for server errors
+			os.Stderr.WriteString("HTTP server failed: " + err.Error() + "\n")
+			return
 		}
 	}()
 
 	// Wait for shutdown signal
 	<-ctx.Done()
-	log.Info(ctx, "shutting down server...")
+	loggerInstance.Info(ctx, "shutting down server...")
 
 	// Graceful shutdown with timeout
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error(ctx, "server shutdown failed", logger.Error(err))
+		loggerInstance.Error(ctx, "server shutdown failed", logger.Error(err))
 	}
 
-	log.Info(ctx, "server stopped")
+	loggerInstance.Info(ctx, "server stopped")
 }
 
 // startSystemMetricsUpdater starts a background goroutine that updates system metrics.

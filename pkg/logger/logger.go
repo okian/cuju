@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -34,7 +35,7 @@ type Field struct {
 	Value interface{}
 }
 
-// Field constructors.
+// String creates a string field for structured logging.
 func String(key, val string) Field          { return Field{Key: key, Value: val} }
 func Int(key string, val int) Field         { return Field{Key: key, Value: val} }
 func Float64(key string, val float64) Field { return Field{Key: key, Value: val} }
@@ -90,8 +91,8 @@ func convertFields(fields []Field) []slog.Attr {
 	return attrs
 }
 
-var global Logger
-var levelVar slog.LevelVar
+var global Logger          //nolint:gochecknoglobals // intentional global for singleton logger
+var levelVar slog.LevelVar //nolint:gochecknoglobals // intentional global for log level control
 
 // Init initializes the global logger.
 func Init() error {
@@ -116,7 +117,7 @@ func getCaller() string {
 	if err != nil {
 		// Fallback to just filename if we can't get working directory
 		fileName := filepath.Base(file)
-		return fmt.Sprintf("%s:%d", fileName, line)
+		return fileName + ":" + strconv.Itoa(line)
 	}
 
 	// Make the file path relative to the working directory
@@ -124,10 +125,10 @@ func getCaller() string {
 	if err != nil {
 		// Fallback to just filename if relative path fails
 		fileName := filepath.Base(file)
-		return fmt.Sprintf("%s:%d", fileName, line)
+		return fileName + ":" + strconv.Itoa(line)
 	}
 
-	return fmt.Sprintf("%s:%d", relPath, line)
+	return relPath + ":" + strconv.Itoa(line)
 }
 
 // Get returns the global logger.

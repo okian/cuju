@@ -78,7 +78,7 @@ func NewInMemoryQueue(opts ...Option) *InMemoryQueue {
 }
 
 // Enqueue adds an event to the queue.
-func (q *InMemoryQueue) Enqueue(ctx context.Context, e Event) bool {
+func (q *InMemoryQueue) Enqueue(ctx context.Context, e Event) bool { //nolint:gocritic // hugeParam: Event must be passed by value for channel semantics
 	start := time.Now()
 	defer func() {
 		latency := time.Since(start).Milliseconds()

@@ -3,15 +3,17 @@ package testevents
 import (
 	"context"
 	"fmt"
-	"log"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/okian/cuju/pkg/logger"
 )
 
 // retrieveRankings retrieves rankings for all talents concurrently.
-func retrieveRankings(ctx context.Context, config *Config, events []Event, stats *Stats) ([]Entry, error) {
-	log.Printf("🏆 Retrieving rankings for %d talents with %d workers...", len(events), config.Workers)
+func retrieveRankings(ctx context.Context, config *Config, events []Event, stats *Stats) ([]Entry, error) { //nolint:gocognit,unparam // complex function required for concurrent ranking retrieval, error return for consistency
+	logger.Get().Info(ctx, "retrieving rankings for talents", logger.Int("talents", len(events)), logger.Int("workers", config.Workers))
 
 	client := newHTTPClient(config.Timeout)
 
@@ -39,7 +41,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 	// Start workers
 	for i := 0; i < config.Workers; i++ {
 		wg.Add(1)
-		go func(workerID int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			for index := range talentChan {
@@ -53,7 +55,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 					if err != nil {
 						atomic.AddInt64(&failed, 1)
 						if config.Verbose {
-							log.Printf("⚠️  Failed to get rank for %s: %v", talentID, err)
+							logger.Get().Warn(ctx, "failed to get rank for talent", logger.String("talentID", talentID), logger.Error(err))
 						}
 					} else {
 						rankings[index] = entry
@@ -68,11 +70,17 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 						fail := atomic.LoadInt64(&failed)
 
 						if config.Verbose {
-							log.Printf("📊 Ranking progress: %d/%d retrieved (success: %d, failed: %d)",
-								total, len(talentIDs), ret, fail)
+							logger.Get().Info(ctx, "ranking progress",
+								logger.Int("total", int(total)),
+								logger.Int("talents", len(talentIDs)),
+								logger.Int("success", int(ret)),
+								logger.Int("failed", int(fail)))
 						} else {
-							log.Printf("\r🏆 Rankings: %d/%d retrieved (success: %d, failed: %d)",
-								total, len(talentIDs), ret, fail)
+							logger.Get().Info(ctx, "rankings progress",
+								logger.Int("total", int(total)),
+								logger.Int("talents", len(talentIDs)),
+								logger.Int("success", int(ret)),
+								logger.Int("failed", int(fail)))
 						}
 					}
 				}
@@ -97,7 +105,7 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 
 	// Final progress report
 	if !config.Verbose {
-		log.Println() // New line after progress indicator
+		logger.Get().Info(ctx, "progress indicator complete")
 	}
 
 	// Filter out empty entries (failed retrievals)
@@ -111,25 +119,24 @@ func retrieveRankings(ctx context.Context, config *Config, events []Event, stats
 	// Update stats
 	stats.RankingsRetrieved = len(validRankings)
 
-	log.Printf(`✅ Ranking retrieval completed:
-   Retrieved: %d
-   Failed: %d
-`, len(validRankings), int(atomic.LoadInt64(&failed)))
+	logger.Get().Info(ctx, "ranking retrieval completed",
+		logger.Int("retrieved", len(validRankings)),
+		logger.Int("failed", int(atomic.LoadInt64(&failed))))
 
 	return validRankings, nil
 }
 
 // retrieveSingleRanking retrieves ranking for a single talent.
 func retrieveSingleRanking(ctx context.Context, client *HTTPClient, baseURL, talentID string) (Entry, error) {
-	url := fmt.Sprintf("%s/rank/%s", baseURL, talentID)
+	url := baseURL + "/rank/" + talentID
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(ctx, url)
 	if err != nil {
 		return Entry{}, fmt.Errorf("request failed: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Printf("failed to close response body: %v", err)
+			logger.Get().Error(context.Background(), "failed to close response body", logger.Error(err))
 		}
 	}()
 
@@ -153,18 +160,18 @@ func retrieveSingleRanking(ctx context.Context, client *HTTPClient, baseURL, tal
 
 // getLeaderboard retrieves the top N leaderboard entries.
 func getLeaderboard(ctx context.Context, config *Config, stats *Stats) ([]Entry, error) {
-	log.Printf("🥇 Getting top %d leaderboard entries...", config.TopN)
+	logger.Get().Info(ctx, "getting top leaderboard entries", logger.Int("topN", config.TopN))
 
 	client := newHTTPClient(config.Timeout)
-	url := fmt.Sprintf("%s/leaderboard?limit=%d", config.BaseURL, config.TopN)
+	url := config.BaseURL + "/leaderboard?limit=" + strconv.Itoa(config.TopN)
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Printf("failed to close response body: %v", err)
+			logger.Get().Error(context.Background(), "failed to close response body", logger.Error(err))
 		}
 	}()
 
@@ -184,7 +191,7 @@ func getLeaderboard(ctx context.Context, config *Config, stats *Stats) ([]Entry,
 	}
 
 	stats.LeaderboardEntries = len(leaderboard)
-	log.Printf("✅ Retrieved %d leaderboard entries", len(leaderboard))
+	logger.Get().Info(ctx, "retrieved leaderboard entries", logger.Int("count", len(leaderboard)))
 
 	return leaderboard, nil
 }

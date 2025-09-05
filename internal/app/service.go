@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ const (
 	defaultQueueSize         = 200000
 	defaultDedupeSize        = 500000
 	defaultSkillWeight       = 1.5
+	defaultDribbleWeight     = 3.0
 	defaultScoringMinLatency = 80 * time.Millisecond
 	defaultScoringMaxLatency = 150 * time.Millisecond
 )
@@ -45,7 +47,7 @@ func (a *scoringAdapter) Score(ctx context.Context, talentID string, rawMetric f
 
 	result, err := a.scorer.Score(ctx, input)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to score event: %w", err)
 	}
 
 	return result.Score, nil
@@ -60,7 +62,7 @@ type Service struct {
 	deduper     dedupe.Deduper
 	eventQueue  eventqueue.Queue
 	scorer      scoring.Scorer
-	workerPool  *workerpool.WorkerPool
+	workerPool  *workerpool.Pool
 
 	// Configuration
 	workerCount   int
@@ -134,11 +136,11 @@ func WithDefaultSkillWeight(weight float64) Option {
 }
 
 // WithScoringLatencyRange sets the simulated scoring latency range.
-func WithScoringLatencyRange(min, max time.Duration) Option {
+func WithScoringLatencyRange(minLatency, maxLatency time.Duration) Option {
 	return func(s *Service) {
-		if min > 0 && max > min {
-			s.scoringMinLatency = min
-			s.scoringMaxLatency = max
+		if minLatency > 0 && maxLatency > minLatency {
+			s.scoringMinLatency = minLatency
+			s.scoringMaxLatency = maxLatency
 		}
 	}
 }
@@ -150,7 +152,7 @@ func New(opts ...Option) *Service {
 		queueSize:   defaultQueueSize,                           // Default queue size
 		dedupeSize:  defaultDedupeSize,                          // Default dedupe cache size
 		skillWeights: map[string]float64{
-			"dribble": 3.0,
+			"dribble": defaultDribbleWeight,
 		},
 		defaultWeight:     defaultSkillWeight,
 		stopCh:            make(chan struct{}),
@@ -200,7 +202,7 @@ func (s *Service) Start(ctx context.Context) error {
 
 	// Create and start worker pool with scoring adapter
 	scoringAdapter := &scoringAdapter{scorer: s.scorer}
-	s.workerPool = workerpool.NewWorkerPool(s.workerCount, s.eventQueue, scoringAdapter, s.leaderboard)
+	s.workerPool = workerpool.NewPool(s.workerCount, s.eventQueue, scoringAdapter, s.leaderboard)
 	s.workerPool.Start(ctx)
 
 	s.started = true
@@ -279,7 +281,7 @@ func (s *Service) Enqueue(ctx context.Context, e any) bool {
 
 	// Try to extract fields using reflection
 	v := reflect.ValueOf(e)
-	if v.Kind() == reflect.Struct {
+	if v.Kind() == reflect.Struct { //nolint:nestif // complex nested logic required for event processing
 		talentID := v.FieldByName("TalentID").String()
 		rawMetric := v.FieldByName("RawMetric").Float()
 		skill := v.FieldByName("Skill").String()
@@ -295,10 +297,10 @@ func (s *Service) Enqueue(ctx context.Context, e any) bool {
 			eventID := v.FieldByName("EventID").String()
 			if eventID == "" {
 				// Generate a deterministic event ID based on content for deduplication
-				eventID = fmt.Sprintf("%s_%s_%f", talentID, skill, rawMetric)
+				eventID = talentID + "_" + skill + "_" + strconv.FormatFloat(rawMetric, 'f', -1, 64)
 			}
 
-			// Note: Duplicate checking is handled by the HTTP API layer
+			// Duplicate checking is handled by the HTTP API layer
 			// Events reaching this point have already been validated for duplicates
 
 			workerEvent := model.Event{
@@ -333,7 +335,7 @@ func (s *Service) Enqueue(ctx context.Context, e any) bool {
 func (s *Service) TopN(ctx context.Context, n int) ([]types.Entry, error) {
 	entries, err := s.leaderboard.TopN(ctx, n)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get top N entries: %w", err)
 	}
 
 	// Convert to API format
@@ -353,7 +355,7 @@ func (s *Service) TopN(ctx context.Context, n int) ([]types.Entry, error) {
 func (s *Service) Rank(ctx context.Context, talentID string) (types.Entry, error) {
 	entry, err := s.leaderboard.Rank(ctx, talentID)
 	if err != nil {
-		return types.Entry{}, err
+		return types.Entry{}, fmt.Errorf("failed to get rank for talent %s: %w", talentID, err)
 	}
 
 	return types.Entry{

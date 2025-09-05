@@ -54,8 +54,10 @@ export CUJU_CONFIG=./config.yaml
 * **POST /events** - Submit performance events
 * **GET /leaderboard?limit=N** - Get top N leaderboard entries  
 * **GET /rank/{talent_id}** - Get specific talent rank
-* **GET /healthz** - Health check
-* **GET /dashboard** - Web monitoring dashboard
+* **GET /healthz** - Health check (Prometheus metrics)
+* **GET /stats** - Service statistics (JSON format)
+* **GET /dashboard** - Web monitoring dashboard (HTML with real-time metrics)
+* **GET /api-docs** - Interactive API documentation (Swagger UI with ReDoc)
 
 ### Example Usage
 ```bash
@@ -440,6 +442,6 @@ This design evolution represents the natural progression from a focused MVP to a
 
 ### Monitoring
 - **Metrics**: `http://localhost:9080/healthz` (Prometheus metrics)
-- **Dashboard**: `http://localhost:9080/dashboard` (Web UI)
-- **Health**: `http://localhost:9080/healthz`
-- **Stats**: `http://localhost:9080/stats`
+- **Dashboard**: `http://localhost:9080/dashboard` (Web UI with real-time metrics)
+- **Stats**: `http://localhost:9080/stats` (JSON service statistics)
+- **API Docs**: `http://localhost:9080/api-docs` (Interactive Swagger UI)

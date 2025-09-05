@@ -9,6 +9,7 @@ paths:
   /events:
     post:
       summary: Ingest a performance event
+      description: Submit a performance event for asynchronous processing. Time complexity: O(1) - Hash map lookup + channel send
       operationId: postEvent
       requestBody:
         required: true
@@ -44,14 +45,13 @@ paths:
   /leaderboard:
     get:
       summary: Get Top-N leaderboard
+      description: Retrieve top N leaderboard entries in ranked order. Time complexity: O(log n + N) - Treap in-order traversal with limit
       operationId: getLeaderboard
       parameters:
         - in: query
           name: limit
           schema:
             type: integer
-            minimum: 1
-            maximum: 100
           required: true
           description: Number of results to return
       responses:
@@ -72,6 +72,7 @@ paths:
   /rank/{talent_id}:
     get:
       summary: Get rank for a talent
+      description: Get rank and score for a specific talent. Time complexity: O(log n) - Single treap rank calculation
       operationId: getRank
       parameters:
         - in: path
@@ -94,15 +95,56 @@ paths:
                 $ref: '#/components/schemas/Error'
   /healthz:
     get:
-      summary: Health check
+      summary: Prometheus metrics endpoint
+      description: Health check endpoint returning Prometheus metrics in OpenMetrics format. Time complexity: O(1) - Simple status check
       operationId: healthz
       responses:
         '200':
-          description: Service healthy
+          description: Prometheus metrics in OpenMetrics format
+          content:
+            application/openmetrics-text:
+              schema:
+                type: string
+                description: Prometheus metrics in OpenMetrics format
+  /stats:
+    get:
+      summary: Service statistics
+      description: Get current service statistics and metrics in JSON format. Time complexity: O(1) - Direct metric access
+      operationId: getStats
+      responses:
+        '200':
+          description: Service statistics
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Health'
+                type: object
+                description: Service statistics and metrics
+  /dashboard:
+    get:
+      summary: Web monitoring dashboard
+      description: Web-based monitoring dashboard with real-time metrics visualization. Time complexity: O(1) - Static HTML serving
+      operationId: getDashboard
+      responses:
+        '200':
+          description: HTML dashboard
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML dashboard with real-time metrics
+  /api-docs:
+    get:
+      summary: Interactive API documentation
+      description: Interactive API documentation with Swagger UI and ReDoc interface. Time complexity: O(1) - Static HTML serving
+      operationId: getApiDocs
+      responses:
+        '200':
+          description: Swagger UI with ReDoc interface
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML page with interactive API documentation
 components:
   schemas:
     Event:
@@ -144,12 +186,6 @@ components:
         duplicate:
           type: boolean
           example: false
-    Health:
-      type: object
-      properties:
-        status:
-          type: string
-          example: ok
     Error:
       type: object
       required: [code, message]

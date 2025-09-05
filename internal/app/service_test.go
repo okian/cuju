@@ -7,7 +7,7 @@ import (
 
 	service "github.com/okian/cuju/internal/app"
 	"github.com/okian/cuju/pkg/logger"
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/smartystreets/goconvey/convey"
 )
 
 func init() {
@@ -19,111 +19,111 @@ func init() {
 }
 
 func TestService_New(t *testing.T) {
-	Convey("Given a new service with default options", t, func() {
+	convey.Convey("Given a new service with default options", t, func() {
 		svc := service.New()
 
-		Convey("Then it should have sensible defaults", func() {
-			So(svc, ShouldNotBeNil)
+		convey.Convey("Then it should have sensible defaults", func() {
+			convey.So(svc, convey.ShouldNotBeNil)
 		})
 	})
 
-	Convey("Given a new service with custom options", t, func() {
+	convey.Convey("Given a new service with custom options", t, func() {
 		svc := service.New(
 			service.WithWorkerCount(8),
 			service.WithQueueSize(50_000),
 			service.WithDedupeSize(25_000),
 		)
 
-		Convey("Then it should be created successfully", func() {
-			So(svc, ShouldNotBeNil)
+		convey.Convey("Then it should be created successfully", func() {
+			convey.So(svc, convey.ShouldNotBeNil)
 		})
 	})
 }
 
 func TestService_Start(t *testing.T) {
-	Convey("Given a new service", t, func() {
+	convey.Convey("Given a new service", t, func() {
 		svc := service.New()
 		// Ensure service is stopped after test
 		defer svc.Stop()
 
-		Convey("When starting the service", func() {
+		convey.Convey("When starting the service", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			err := svc.Start(ctx)
 
-			Convey("Then it should start successfully", func() {
-				So(err, ShouldBeNil)
+			convey.Convey("Then it should start successfully", func() {
+				convey.So(err, convey.ShouldBeNil)
 			})
 
-			Convey("And it should be marked as started", func() {
+			convey.Convey("And it should be marked as started", func() {
 				stats := svc.GetStats()
-				So(stats["started"], ShouldEqual, true)
+				convey.So(stats["started"], convey.ShouldEqual, true)
 			})
 		})
 	})
 }
 
 func TestService_Stop(t *testing.T) {
-	Convey("Given a started service", t, func() {
+	convey.Convey("Given a started service", t, func() {
 		svc := service.New()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err := svc.Start(ctx)
-		So(err, ShouldBeNil)
+		convey.So(err, convey.ShouldBeNil)
 
-		Convey("When stopping the service", func() {
+		convey.Convey("When stopping the service", func() {
 			svc.Stop()
 
-			Convey("Then it should be marked as stopped", func() {
+			convey.Convey("Then it should be marked as stopped", func() {
 				stats := svc.GetStats()
-				So(stats["started"], ShouldEqual, false)
+				convey.So(stats["started"], convey.ShouldEqual, false)
 			})
 		})
 	})
 }
 
 func TestService_SeenAndRecord(t *testing.T) {
-	Convey("Given a started service", t, func() {
+	convey.Convey("Given a started service", t, func() {
 		svc := service.New()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err := svc.Start(ctx)
-		So(err, ShouldBeNil)
+		convey.So(err, convey.ShouldBeNil)
 		// Ensure service is stopped after test
 		defer svc.Stop()
 
-		Convey("When checking a new event ID", func() {
+		convey.Convey("When checking a new event ID", func() {
 			eventID := "event-123"
 			seen := svc.SeenAndRecord(ctx, eventID)
 
-			Convey("Then it should not have been seen before", func() {
-				So(seen, ShouldBeFalse)
+			convey.Convey("Then it should not have been seen before", func() {
+				convey.So(seen, convey.ShouldBeFalse)
 			})
 		})
 
-		Convey("When checking the same event ID again", func() {
+		convey.Convey("When checking the same event ID again", func() {
 			eventID := "event-456"
 			svc.SeenAndRecord(ctx, eventID)         // First time
 			seen := svc.SeenAndRecord(ctx, eventID) // Second time
 
-			Convey("Then it should have been seen before", func() {
-				So(seen, ShouldBeTrue)
+			convey.Convey("Then it should have been seen before", func() {
+				convey.So(seen, convey.ShouldBeTrue)
 			})
 		})
 	})
 }
 
 func TestService_Enqueue(t *testing.T) {
-	Convey("Given a started service", t, func() {
+	convey.Convey("Given a started service", t, func() {
 		svc := service.New()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err := svc.Start(ctx)
-		So(err, ShouldBeNil)
+		convey.So(err, convey.ShouldBeNil)
 		// Ensure service is stopped after test
 		defer svc.Stop()
 
-		Convey("When enqueueing a valid event", func() {
+		convey.Convey("When enqueueing a valid event", func() {
 			event := struct {
 				EventID   string
 				TalentID  string
@@ -138,23 +138,23 @@ func TestService_Enqueue(t *testing.T) {
 
 			success := svc.Enqueue(ctx, event)
 
-			Convey("Then it should be enqueued successfully", func() {
-				So(success, ShouldBeTrue)
+			convey.Convey("Then it should be enqueued successfully", func() {
+				convey.So(success, convey.ShouldBeTrue)
 			})
 		})
 	})
 }
 
 func TestService_GetStats(t *testing.T) {
-	Convey("Given a new service", t, func() {
+	convey.Convey("Given a new service", t, func() {
 		svc := service.New()
 
-		Convey("When getting stats before starting", func() {
+		convey.Convey("When getting stats before starting", func() {
 			stats := svc.GetStats()
 
-			Convey("Then it should return basic stats", func() {
-				So(stats, ShouldNotBeNil)
-				So(stats["started"], ShouldEqual, false)
+			convey.Convey("Then it should return basic stats", func() {
+				convey.So(stats, convey.ShouldNotBeNil)
+				convey.So(stats["started"], convey.ShouldEqual, false)
 			})
 		})
 	})

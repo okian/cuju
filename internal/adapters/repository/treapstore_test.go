@@ -352,19 +352,19 @@ func TestMultipleScoresPerTalent(t *testing.T) {
 
 			switch k % 5 {
 			case 0: // Initial scores (0-200)
-				score = rand.Float64() * 200.0 //nolint:gosec // test data generation
+				score = rand.Float64() * 200.0
 			case 1: // Beginner scores (200-400)
-				score = 200.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
+				score = 200.0 + rand.Float64()*200.0
 			case 2: // Intermediate scores (400-600)
-				score = 400.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
+				score = 400.0 + rand.Float64()*200.0
 			case 3: // Advanced scores (600-800)
-				score = 600.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
+				score = 600.0 + rand.Float64()*200.0
 			case 4: // Elite scores (800-1000)
-				score = 800.0 + rand.Float64()*200.0 //nolint:gosec // test data generation
+				score = 800.0 + rand.Float64()*200.0
 			}
 
 			// Add random variation
-			variation := (rand.Float64() - 0.5) * 50.0 //nolint:gosec // test data generation
+			variation := (rand.Float64() - 0.5) * 50.0
 			score += variation
 
 			if score < 0 {
@@ -527,7 +527,7 @@ func TestTreapStore_RankCorrectnessUnderStress(t *testing.T) {
 
 	for i := 0; i < numTalents; i++ {
 		talents[i] = fmt.Sprintf("talent_%d", i)
-		scores[i] = rand.Float64() * 10000.0 //nolint:gosec // test data generation
+		scores[i] = rand.Float64() * 10000.0
 
 		updated, err := store.UpdateBest(ctx, talents[i], scores[i])
 		if err != nil {

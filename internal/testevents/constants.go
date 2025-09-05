@@ -15,6 +15,6 @@ const (
 
 // Runner configuration constants.
 const (
-	HealthCheckDelay     = 5 * time.Second
+	HealthCheckDelay     = 2 * time.Minute
 	PercentageMultiplier = 100
 )

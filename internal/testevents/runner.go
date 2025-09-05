@@ -3,10 +3,16 @@ package testevents
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/okian/cuju/pkg/logger"
+)
+
+// File permission constants.
+const (
+	directoryPermission = 0750
 )
 
 // Run executes the complete event test.
@@ -15,17 +21,14 @@ func Run(ctx context.Context, config *Config) error {
 		StartTime: time.Now(),
 	}
 
-	log.Printf(`🚀 Starting Cuju Event Test
-📊 Configuration:
-   Base URL: %s
-   Events: %d
-   Workers: %d
-   Timeout: %v
-   Top N: %d
-   Log File: %s
-   Verbose: %t
-
-`, config.BaseURL, config.NumEvents, config.Workers, config.Timeout, config.TopN, config.LogFile, config.Verbose)
+	logger.Get().Info(ctx, "starting cuju event test",
+		logger.String("baseURL", config.BaseURL),
+		logger.Int("events", config.NumEvents),
+		logger.Int("workers", config.Workers),
+		logger.String("timeout", config.Timeout.String()),
+		logger.Int("topN", config.TopN),
+		logger.String("logFile", config.LogFile),
+		logger.Any("verbose", config.Verbose))
 
 	// Step 1: Check service health
 	if err := checkServiceHealth(ctx, config); err != nil {
@@ -44,7 +47,7 @@ func Run(ctx context.Context, config *Config) error {
 	}
 
 	// Step 4: Wait for processing
-	log.Println("⏳ Waiting for events to be processed...")
+	logger.Get().Info(ctx, "waiting for events to be processed")
 	time.Sleep(HealthCheckDelay)
 
 	// Step 5: Retrieve rankings concurrently
@@ -66,33 +69,33 @@ func Run(ctx context.Context, config *Config) error {
 
 	// Step 8: Save events to file
 	if err := saveEventsToFile(ctx, config, events); err != nil {
-		log.Printf("⚠️  Warning: Failed to save events to file: %v", err)
+		logger.Get().Warn(ctx, "failed to save events to file", logger.Error(err))
 	}
 
 	// Final statistics
 	stats.EndTime = time.Now()
 	stats.Duration = stats.EndTime.Sub(stats.StartTime)
 
-	printFinalStats(stats)
+	displayFinalStats(stats)
 
-	log.Println("✅ Test completed successfully!")
+	logger.Get().Info(ctx, "test completed successfully")
 	return nil
 }
 
 // checkServiceHealth verifies the service is running.
 func checkServiceHealth(ctx context.Context, config *Config) error {
-	log.Println("🔍 Checking service health...")
+	logger.Get().Info(ctx, "checking service health")
 
 	client := newHTTPClient(config.Timeout)
 	url := config.BaseURL + "/healthz"
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(ctx, url)
 	if err != nil {
 		return fmt.Errorf("failed to connect to service: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Printf("failed to close response body: %v", err)
+			logger.Get().Error(context.Background(), "failed to close response body", logger.Error(err))
 		}
 	}()
 
@@ -101,7 +104,7 @@ func checkServiceHealth(ctx context.Context, config *Config) error {
 		return fmt.Errorf("service health check failed with status: %d", resp.StatusCode)
 	}
 
-	log.Println("✅ Service is healthy")
+	logger.Get().Info(ctx, "service is healthy")
 	return nil
 }
 
@@ -115,25 +118,25 @@ func saveEventsToFile(ctx context.Context, config *Config, events []Event) error
 	filename := config.OutputFile
 	if filename == "" {
 		timestamp := time.Now().Format("20060102_150405")
-		filename = fmt.Sprintf("generated_events_%s.json", timestamp)
+		filename = "generated_events_" + timestamp + ".json"
 	}
 
 	// Ensure the directory exists
 	dir := filepath.Dir(filename)
 	if dir != "." {
-		if err := os.MkdirAll(dir, 0750); err != nil { //nolint:gosec // directory permissions
+		if err := os.MkdirAll(dir, directoryPermission); err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
 
 	// Write events to file
-	file, err := os.Create(filename) //nolint:gosec // file creation for test output
+	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			log.Printf("failed to close file: %v", err)
+			logger.Get().Error(context.Background(), "failed to close file", logger.Error(err))
 		}
 	}()
 
@@ -165,37 +168,31 @@ func saveEventsToFile(ctx context.Context, config *Config, events []Event) error
 		return fmt.Errorf("failed to write closing bracket: %w", err)
 	}
 
-	log.Printf("💾 Events saved to: %s", filename)
+	logger.Get().Info(ctx, "events saved to file", logger.String("filename", filename))
 	return nil
 }
 
-// printFinalStats prints the final test statistics.
-func printFinalStats(stats *Stats) {
+// displayFinalStats prints the final test statistics.
+func displayFinalStats(stats *Stats) {
 	var successRate, eventsPerSecond float64
-	var successRateStr, eventsPerSecondStr string
 
 	if stats.EventsSubmitted > 0 {
 		successRate = float64(stats.EventsSuccessful) / float64(stats.EventsSubmitted) * PercentageMultiplier
-		successRateStr = fmt.Sprintf("   Success Rate: %.2f%%\n", successRate)
 	}
 
 	if stats.Duration > 0 {
 		eventsPerSecond = float64(stats.EventsSubmitted) / stats.Duration.Seconds()
-		eventsPerSecondStr = fmt.Sprintf("   Events/Second: %.2f\n", eventsPerSecond)
 	}
 
-	log.Printf(`
-📈 === FINAL STATISTICS ===
-   Events Generated: %d
-   Events Submitted: %d
-   Events Successful: %d
-   Events Duplicate: %d
-   Events Failed: %d
-   Rankings Retrieved: %d
-   Leaderboard Entries: %d
-   Total Duration: %v
-%s%s
-`, stats.EventsGenerated, stats.EventsSubmitted, stats.EventsSuccessful,
-		stats.EventsDuplicate, stats.EventsFailed, stats.RankingsRetrieved,
-		stats.LeaderboardEntries, stats.Duration, successRateStr, eventsPerSecondStr)
+	logger.Get().Info(context.Background(), "final statistics",
+		logger.Int("eventsGenerated", stats.EventsGenerated),
+		logger.Int("eventsSubmitted", stats.EventsSubmitted),
+		logger.Int("eventsSuccessful", stats.EventsSuccessful),
+		logger.Int("eventsDuplicate", stats.EventsDuplicate),
+		logger.Int("eventsFailed", stats.EventsFailed),
+		logger.Int("rankingsRetrieved", stats.RankingsRetrieved),
+		logger.Int("leaderboardEntries", stats.LeaderboardEntries),
+		logger.String("duration", stats.Duration.String()),
+		logger.Float64("successRate", successRate),
+		logger.Float64("eventsPerSecond", eventsPerSecond))
 }

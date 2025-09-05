@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/okian/cuju/internal/adapters/mq/queue"
@@ -124,7 +125,6 @@ func (w *InMemoryWorker) Run(ctx context.Context) {
 
 // Shutdown gracefully stops the worker.
 func (w *InMemoryWorker) Shutdown(ctx context.Context) error {
-
 	// Signal shutdown
 	close(w.shutdown)
 
@@ -139,7 +139,7 @@ func (w *InMemoryWorker) Shutdown(ctx context.Context) error {
 }
 
 // processEvent handles a single event.
-func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) error {
+func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) error { //nolint:gocritic // hugeParam: Event must be passed by value for channel semantics
 	// Track overall processing latency
 	start := time.Now()
 	defer func() {
@@ -165,7 +165,7 @@ func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) er
 			logger.String("eventID", event.EventID),
 			logger.Error(err),
 		)
-		return err
+		return fmt.Errorf("failed to score event %s: %w", event.EventID, err)
 	}
 
 	// Update the leaderboard
@@ -199,8 +199,8 @@ func (w *InMemoryWorker) processEvent(ctx context.Context, event queue.Event) er
 	return nil
 }
 
-// WorkerPool manages multiple workers.
-type WorkerPool struct {
+// Pool manages multiple workers.
+type Pool struct {
 	workers []*InMemoryWorker
 	queue   Queue
 	scorer  Scorer
@@ -218,13 +218,13 @@ type WorkerPool struct {
 	logger logger.Logger
 }
 
-// NewWorkerPool creates a new worker pool.
-func NewWorkerPool(workerCount int, queue Queue, scorer Scorer, updater Updater) *WorkerPool {
+// NewPool creates a new worker pool.
+func NewPool(workerCount int, queue Queue, scorer Scorer, updater Updater) *Pool {
 	if workerCount < 1 {
 		workerCount = runtime.NumCPU() * defaultWorkerMultiplier
 	}
 
-	pool := &WorkerPool{
+	pool := &Pool{
 		workers:           make([]*InMemoryWorker, workerCount),
 		queue:             queue,
 		scorer:            scorer,
@@ -240,7 +240,7 @@ func NewWorkerPool(workerCount int, queue Queue, scorer Scorer, updater Updater)
 			queue,
 			scorer,
 			updater,
-			WithName(fmt.Sprintf("worker-%d", i)),
+			WithName("worker-"+strconv.Itoa(i)),
 		)
 	}
 
@@ -253,7 +253,7 @@ func NewWorkerPool(workerCount int, queue Queue, scorer Scorer, updater Updater)
 }
 
 // Start starts all workers in the pool.
-func (p *WorkerPool) Start(ctx context.Context) {
+func (p *Pool) Start(ctx context.Context) {
 	for _, worker := range p.workers {
 		go worker.Run(ctx)
 	}
@@ -263,7 +263,7 @@ func (p *WorkerPool) Start(ctx context.Context) {
 }
 
 // startMetricsUpdater starts a background goroutine that updates worker metrics.
-func (p *WorkerPool) startMetricsUpdater(ctx context.Context) {
+func (p *Pool) startMetricsUpdater(ctx context.Context) {
 	ticker := time.NewTicker(metricsUpdateInterval) // Update metrics every 5 seconds
 	defer ticker.Stop()
 
@@ -280,7 +280,7 @@ func (p *WorkerPool) startMetricsUpdater(ctx context.Context) {
 }
 
 // updateMetrics updates worker-related metrics.
-func (p *WorkerPool) updateMetrics() {
+func (p *Pool) updateMetrics() {
 	// Calculate messages per second
 	now := time.Now()
 	timeDiff := now.Sub(p.lastProcessedTime).Seconds()
@@ -295,12 +295,12 @@ func (p *WorkerPool) updateMetrics() {
 }
 
 // RecordProcessedMessage increments the processed message count.
-func (p *WorkerPool) RecordProcessedMessage() {
+func (p *Pool) RecordProcessedMessage() {
 	p.processedCount++
 }
 
 // Stop gracefully stops all workers.
-func (p *WorkerPool) Stop() {
+func (p *Pool) Stop() {
 	// Signal shutdown to all workers
 	close(p.shutdown)
 
@@ -316,8 +316,7 @@ func (p *WorkerPool) Stop() {
 }
 
 // Shutdown gracefully shuts down the entire worker pool.
-func (p *WorkerPool) Shutdown(ctx context.Context) error {
-
+func (p *Pool) Shutdown(ctx context.Context) error {
 	// First close the queue to stop new events
 	if closer, ok := p.queue.(interface{ Close() error }); ok {
 		if err := closer.Close(); err != nil {

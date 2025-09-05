@@ -3,6 +3,7 @@ package scoring
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -21,11 +22,11 @@ const (
 type Option func(*InMemoryScorer)
 
 // WithLatencyRange sets the simulated latency range.
-func WithLatencyRange(min, max time.Duration) Option {
+func WithLatencyRange(minLatency, maxLatency time.Duration) Option {
 	return func(s *InMemoryScorer) {
-		if min > 0 && max > min {
-			s.minLatency = min
-			s.maxLatency = max
+		if minLatency > 0 && maxLatency > minLatency {
+			s.minLatency = minLatency
+			s.maxLatency = maxLatency
 		}
 	}
 }
@@ -102,7 +103,7 @@ func (s *InMemoryScorer) Score(ctx context.Context, in Input) (Result, error) {
 	latency := s.minLatency + time.Duration(s.rng.Int63n(int64(s.maxLatency-s.minLatency)))
 	select {
 	case <-ctx.Done():
-		return Result{}, ctx.Err()
+		return Result{}, fmt.Errorf("context cancelled: %w", ctx.Err())
 	case <-time.After(latency):
 		// Continue with scoring
 	}
@@ -130,7 +131,7 @@ func (s *InMemoryScorer) SetSkillWeight(skill string, weight float64) {
 }
 
 // SetLatencyRange allows customization of simulated latency.
-func (s *InMemoryScorer) SetLatencyRange(min, max time.Duration) {
-	s.minLatency = min
-	s.maxLatency = max
+func (s *InMemoryScorer) SetLatencyRange(minLatency, maxLatency time.Duration) {
+	s.minLatency = minLatency
+	s.maxLatency = maxLatency
 }

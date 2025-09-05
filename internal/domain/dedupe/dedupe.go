@@ -128,53 +128,78 @@ func (d *inMemoryDeduper) Unrecord(ctx context.Context, id string) {
 	defer d.mu.Unlock()
 
 	if d.maxSize > 0 {
-		// BOUNDED MODE: Remove from linked list and map
-		if node, exists := d.seen[id]; exists {
-			// Remove from map
-			delete(d.seen, id)
-
-			// Remove from linked list
-			if d.head == node {
-				// Node is at head
-				d.head = node.next
-				if d.head == nil {
-					// Was the last node
-					d.tail = nil
-				}
-			} else if d.tail == node {
-				// Node is at tail
-				// Find the previous node
-				current := d.head
-				for current != nil && current.next != node {
-					current = current.next
-				}
-				if current != nil {
-					current.next = nil
-					d.tail = current
-				}
-			} else {
-				// Node is in the middle
-				current := d.head
-				for current != nil && current.next != node {
-					current = current.next
-				}
-				if current != nil {
-					current.next = node.next
-				}
-			}
-
-			// Return node to pool
-			node.reset()
-			d.nodePool.Put(node)
-
-			d.size.Add(-1)
-		}
+		d.unrecordBounded(id)
 	} else {
-		// UNBOUNDED MODE: Just remove from map
-		if _, exists := d.seen[id]; exists {
-			delete(d.seen, id)
-			d.size.Add(-1)
-		}
+		d.unrecordUnbounded(id)
+	}
+}
+
+// unrecordBounded removes an ID from the bounded mode (linked list + map).
+func (d *inMemoryDeduper) unrecordBounded(id string) {
+	node, exists := d.seen[id]
+	if !exists {
+		return
+	}
+
+	// Remove from map
+	delete(d.seen, id)
+
+	// Remove from linked list
+	d.removeFromLinkedList(node)
+
+	// Return node to pool
+	node.reset()
+	d.nodePool.Put(node)
+	d.size.Add(-1)
+}
+
+// unrecordUnbounded removes an ID from the unbounded mode (map only).
+func (d *inMemoryDeduper) unrecordUnbounded(id string) {
+	if _, exists := d.seen[id]; exists {
+		delete(d.seen, id)
+		d.size.Add(-1)
+	}
+}
+
+// removeFromLinkedList removes a node from the linked list.
+func (d *inMemoryDeduper) removeFromLinkedList(node *node) {
+	if d.head == node {
+		d.removeHead()
+	} else if d.tail == node {
+		d.removeTail()
+	} else {
+		d.removeMiddle(node)
+	}
+}
+
+// removeHead removes the head node from the linked list.
+func (d *inMemoryDeduper) removeHead() {
+	d.head = d.head.next
+	if d.head == nil {
+		d.tail = nil
+	}
+}
+
+// removeTail removes the tail node from the linked list.
+func (d *inMemoryDeduper) removeTail() {
+	current := d.head
+	for current != nil && current.next != d.tail {
+		current = current.next
+	}
+	if current != nil {
+		current.next = nil
+		d.tail = current
+	}
+}
+
+// removeMiddle removes a middle node from the linked list.
+func (d *inMemoryDeduper) removeMiddle(node *node) {
+	current := d.head
+	for current != nil && current.next != node {
+		current = current.next
+	}
+	if current != nil {
+		current.next = node.next
 	}
 }
 

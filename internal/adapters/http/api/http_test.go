@@ -13,7 +13,7 @@ import (
 	"github.com/okian/cuju/internal/adapters/http/api"
 	repository "github.com/okian/cuju/internal/adapters/repository"
 	"github.com/okian/cuju/internal/domain/types"
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/smartystreets/goconvey/convey"
 )
 
 // Mock implementations for testing.
@@ -88,7 +88,7 @@ func (m *mockStatsProvider) GetStats() map[string]interface{} {
 }
 
 func TestServer_Register(t *testing.T) {
-	Convey("Given a new API server", t, func() {
+	convey.Convey("Given a new API server", t, func() {
 		deps := &mockDependencies{
 			dedupe: &mockDeduper{},
 			queue:  &mockQueue{enqueueSuccess: true},
@@ -98,73 +98,73 @@ func TestServer_Register(t *testing.T) {
 		server := api.NewServer(deps, statsProvider)
 		mux := http.NewServeMux()
 
-		Convey("When registering routes", func() {
+		convey.Convey("When registering routes", func() {
 			server.Register(context.Background(), mux, deps)
 
-			Convey("Then all expected routes should be registered", func() {
-				So(mux, ShouldNotBeNil)
+			convey.Convey("Then all expected routes should be registered", func() {
+				convey.So(mux, convey.ShouldNotBeNil)
 			})
 
-			Convey("And health endpoint should be accessible", func() {
-				req := httptest.NewRequest("GET", "/healthz", nil)
+			convey.Convey("And health endpoint should be accessible", func() {
+				req := httptest.NewRequest("GET", "/healthz", http.NoBody)
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 			})
 
-			Convey("And stats endpoint should be accessible", func() {
-				req := httptest.NewRequest("GET", "/stats", nil)
+			convey.Convey("And stats endpoint should be accessible", func() {
+				req := httptest.NewRequest("GET", "/stats", http.NoBody)
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 			})
 
-			Convey("And events endpoint should be accessible", func() {
+			convey.Convey("And events endpoint should be accessible", func() {
 				req := httptest.NewRequest("POST", "/events", strings.NewReader(`{}`))
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusBadRequest) // Invalid request
+				convey.So(w.Code, convey.ShouldEqual, http.StatusBadRequest) // Invalid request
 			})
 
-			Convey("And leaderboard endpoint should be accessible", func() {
-				req := httptest.NewRequest("GET", "/leaderboard?limit=10", nil)
+			convey.Convey("And leaderboard endpoint should be accessible", func() {
+				req := httptest.NewRequest("GET", "/leaderboard?limit=10", http.NoBody)
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 			})
 
-			Convey("And rank endpoint should be accessible", func() {
-				req := httptest.NewRequest("GET", "/rank/test-id", nil)
+			convey.Convey("And rank endpoint should be accessible", func() {
+				req := httptest.NewRequest("GET", "/rank/test-id", http.NoBody)
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 			})
 
-			Convey("And root endpoint should catch everything else", func() {
-				req := httptest.NewRequest("GET", "/unknown", nil)
+			convey.Convey("And root endpoint should catch everything else", func() {
+				req := httptest.NewRequest("GET", "/unknown", http.NoBody)
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusNotFound)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusNotFound)
 			})
 
-			Convey("And dashboard endpoint should serve HTML with refresh control", func() {
-				req := httptest.NewRequest("GET", "/dashboard", nil)
+			convey.Convey("And dashboard endpoint should serve HTML with refresh control", func() {
+				req := httptest.NewRequest("GET", "/dashboard", http.NoBody)
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 				body := w.Body.String()
-				So(body, ShouldContainSubstring, "id=\"refresh-interval\"")
-				So(body, ShouldContainSubstring, "id=\"refresh-control\"")
+				convey.So(body, convey.ShouldContainSubstring, "id=\"refresh-interval\"")
+				convey.So(body, convey.ShouldContainSubstring, "id=\"refresh-control\"")
 			})
 		})
 	})
 }
 
 func TestEventRequest_Validate(t *testing.T) {
-	Convey("Given an event request", t, func() {
+	convey.Convey("Given an event request", t, func() {
 		validTime := time.Now().Format(time.RFC3339)
 
-		Convey("When all fields are valid", func() {
+		convey.Convey("When all fields are valid", func() {
 			req := eventRequest{
 				EventID:   "event-123",
 				TalentID:  "talent-456",
@@ -173,13 +173,13 @@ func TestEventRequest_Validate(t *testing.T) {
 				TS:        validTime,
 			}
 
-			Convey("Then validation should pass", func() {
+			convey.Convey("Then validation should pass", func() {
 				err := req.validate()
-				So(err, ShouldBeNil)
+				convey.So(err, convey.ShouldBeNil)
 			})
 		})
 
-		Convey("When EventID is missing", func() {
+		convey.Convey("When EventID is missing", func() {
 			req := eventRequest{
 				TalentID:  "talent-456",
 				RawMetric: 95.5,
@@ -187,14 +187,14 @@ func TestEventRequest_Validate(t *testing.T) {
 				TS:        validTime,
 			}
 
-			Convey("Then validation should fail", func() {
+			convey.Convey("Then validation should fail", func() {
 				err := req.validate()
-				So(err, ShouldNotBeNil)
-				So(err.Error(), ShouldContainSubstring, "missing event_id")
+				convey.So(err, convey.ShouldNotBeNil)
+				convey.So(err.Error(), convey.ShouldContainSubstring, "missing event_id")
 			})
 		})
 
-		Convey("When EventID is empty string", func() {
+		convey.Convey("When EventID is empty string", func() {
 			req := eventRequest{
 				EventID:   "   ",
 				TalentID:  "talent-456",
@@ -203,14 +203,14 @@ func TestEventRequest_Validate(t *testing.T) {
 				TS:        validTime,
 			}
 
-			Convey("Then validation should fail", func() {
+			convey.Convey("Then validation should fail", func() {
 				err := req.validate()
-				So(err, ShouldNotBeNil)
-				So(err.Error(), ShouldContainSubstring, "missing event_id")
+				convey.So(err, convey.ShouldNotBeNil)
+				convey.So(err.Error(), convey.ShouldContainSubstring, "missing event_id")
 			})
 		})
 
-		Convey("When TalentID is missing", func() {
+		convey.Convey("When TalentID is missing", func() {
 			req := eventRequest{
 				EventID:   "event-123",
 				RawMetric: 95.5,
@@ -218,14 +218,14 @@ func TestEventRequest_Validate(t *testing.T) {
 				TS:        validTime,
 			}
 
-			Convey("Then validation should fail", func() {
+			convey.Convey("Then validation should fail", func() {
 				err := req.validate()
-				So(err, ShouldNotBeNil)
-				So(err.Error(), ShouldContainSubstring, "missing talent_id")
+				convey.So(err, convey.ShouldNotBeNil)
+				convey.So(err.Error(), convey.ShouldContainSubstring, "missing talent_id")
 			})
 		})
 
-		Convey("When Skill is missing", func() {
+		convey.Convey("When Skill is missing", func() {
 			req := eventRequest{
 				EventID:   "event-123",
 				TalentID:  "talent-456",
@@ -233,14 +233,14 @@ func TestEventRequest_Validate(t *testing.T) {
 				TS:        validTime,
 			}
 
-			Convey("Then validation should fail", func() {
+			convey.Convey("Then validation should fail", func() {
 				err := req.validate()
-				So(err, ShouldNotBeNil)
-				So(err.Error(), ShouldContainSubstring, "missing skill")
+				convey.So(err, convey.ShouldNotBeNil)
+				convey.So(err.Error(), convey.ShouldContainSubstring, "missing skill")
 			})
 		})
 
-		Convey("When TS is missing", func() {
+		convey.Convey("When TS is missing", func() {
 			req := eventRequest{
 				EventID:   "event-123",
 				TalentID:  "talent-456",
@@ -248,14 +248,14 @@ func TestEventRequest_Validate(t *testing.T) {
 				Skill:     "programming",
 			}
 
-			Convey("Then validation should fail", func() {
+			convey.Convey("Then validation should fail", func() {
 				err := req.validate()
-				So(err, ShouldNotBeNil)
-				So(err.Error(), ShouldContainSubstring, "missing ts")
+				convey.So(err, convey.ShouldNotBeNil)
+				convey.So(err.Error(), convey.ShouldContainSubstring, "missing ts")
 			})
 		})
 
-		Convey("When TS is invalid format", func() {
+		convey.Convey("When TS is invalid format", func() {
 			req := eventRequest{
 				EventID:   "event-123",
 				TalentID:  "talent-456",
@@ -264,14 +264,14 @@ func TestEventRequest_Validate(t *testing.T) {
 				TS:        "invalid-time",
 			}
 
-			Convey("Then validation should fail", func() {
+			convey.Convey("Then validation should fail", func() {
 				err := req.validate()
-				So(err, ShouldNotBeNil)
-				So(err.Error(), ShouldContainSubstring, "invalid ts")
+				convey.So(err, convey.ShouldNotBeNil)
+				convey.So(err.Error(), convey.ShouldContainSubstring, "invalid ts")
 			})
 		})
 
-		Convey("When TS is valid RFC3339", func() {
+		convey.Convey("When TS is valid RFC3339", func() {
 			testCases := []string{
 				"2023-01-01T12:00:00Z",
 				"2023-01-01T12:00:00+01:00",
@@ -279,7 +279,7 @@ func TestEventRequest_Validate(t *testing.T) {
 			}
 
 			for _, ts := range testCases {
-				Convey(fmt.Sprintf("And TS is %s", ts), func() {
+				convey.Convey(fmt.Sprintf("And TS is %s", ts), func() {
 					req := eventRequest{
 						EventID:   "event-123",
 						TalentID:  "talent-456",
@@ -288,9 +288,9 @@ func TestEventRequest_Validate(t *testing.T) {
 						TS:        ts,
 					}
 
-					Convey("Then validation should pass", func() {
+					convey.Convey("Then validation should pass", func() {
 						err := req.validate()
-						So(err, ShouldBeNil)
+						convey.So(err, convey.ShouldBeNil)
 					})
 				})
 			}
@@ -299,7 +299,7 @@ func TestEventRequest_Validate(t *testing.T) {
 }
 
 func TestEventsHandler_HandlePostEvent(t *testing.T) {
-	Convey("Given an events handler", t, func() {
+	convey.Convey("Given an events handler", t, func() {
 		deps := &mockDependencies{
 			dedupe: &mockDeduper{},
 			queue:  &mockQueue{enqueueSuccess: true},
@@ -307,7 +307,7 @@ func TestEventsHandler_HandlePostEvent(t *testing.T) {
 		}
 		handler := api.NewEventsHandler(deps)
 
-		Convey("When handling a valid POST request", func() {
+		convey.Convey("When handling a valid POST request", func() {
 			validEvent := `{
 				"event_id": "event-123",
 				"talent_id": "talent-456",
@@ -319,19 +319,19 @@ func TestEventsHandler_HandlePostEvent(t *testing.T) {
 			req := httptest.NewRequest("POST", "/events", strings.NewReader(validEvent))
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return accepted status", func() {
+			convey.Convey("Then it should return accepted status", func() {
 				handler.HandlePostEvent(w, req)
-				So(w.Code, ShouldEqual, http.StatusAccepted)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusAccepted)
 
 				var response ackResponse
 				err := json.NewDecoder(w.Body).Decode(&response)
-				So(err, ShouldBeNil)
-				So(response.Status, ShouldEqual, "accepted")
-				So(response.Duplicate, ShouldBeFalse)
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(response.Status, convey.ShouldEqual, "accepted")
+				convey.So(response.Duplicate, convey.ShouldBeFalse)
 			})
 		})
 
-		Convey("When handling a duplicate event", func() {
+		convey.Convey("When handling a duplicate event", func() {
 			validEvent := `{
 				"event_id": "event-123",
 				"talent_id": "talent-456",
@@ -349,30 +349,30 @@ func TestEventsHandler_HandlePostEvent(t *testing.T) {
 			req2 := httptest.NewRequest("POST", "/events", strings.NewReader(validEvent))
 			w2 := httptest.NewRecorder()
 
-			Convey("Then it should return duplicate status", func() {
+			convey.Convey("Then it should return duplicate status", func() {
 				handler.HandlePostEvent(w2, req2)
-				So(w2.Code, ShouldEqual, http.StatusOK)
+				convey.So(w2.Code, convey.ShouldEqual, http.StatusOK)
 
 				var response ackResponse
 				err := json.NewDecoder(w2.Body).Decode(&response)
-				So(err, ShouldBeNil)
-				So(response.Status, ShouldEqual, "duplicate")
-				So(response.Duplicate, ShouldBeTrue)
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(response.Status, convey.ShouldEqual, "duplicate")
+				convey.So(response.Duplicate, convey.ShouldBeTrue)
 			})
 		})
 
-		Convey("When handling an invalid JSON request", func() {
+		convey.Convey("When handling an invalid JSON request", func() {
 			invalidJSON := `{invalid json`
 			req := httptest.NewRequest("POST", "/events", strings.NewReader(invalidJSON))
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return bad request status", func() {
+			convey.Convey("Then it should return bad request status", func() {
 				handler.HandlePostEvent(w, req)
-				So(w.Code, ShouldEqual, http.StatusBadRequest)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusBadRequest)
 			})
 		})
 
-		Convey("When handling a request with missing required fields", func() {
+		convey.Convey("When handling a request with missing required fields", func() {
 			incompleteEvent := `{
 				"event_id": "event-123",
 				"raw_metric": 95.5
@@ -380,23 +380,23 @@ func TestEventsHandler_HandlePostEvent(t *testing.T) {
 			req := httptest.NewRequest("POST", "/events", strings.NewReader(incompleteEvent))
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return bad request status", func() {
+			convey.Convey("Then it should return bad request status", func() {
 				handler.HandlePostEvent(w, req)
-				So(w.Code, ShouldEqual, http.StatusBadRequest)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusBadRequest)
 			})
 		})
 
-		Convey("When handling a non-POST request", func() {
-			req := httptest.NewRequest("GET", "/events", nil)
+		convey.Convey("When handling a non-POST request", func() {
+			req := httptest.NewRequest("GET", "/events", http.NoBody)
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return not found status", func() {
+			convey.Convey("Then it should return not found status", func() {
 				handler.HandlePostEvent(w, req)
-				So(w.Code, ShouldEqual, http.StatusNotFound)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusNotFound)
 			})
 		})
 
-		Convey("When enqueue fails due to backpressure", func() {
+		convey.Convey("When enqueue fails due to backpressure", func() {
 			deps.queue.enqueueSuccess = false
 			validEvent := `{
 				"event_id": "event-456",
@@ -409,21 +409,21 @@ func TestEventsHandler_HandlePostEvent(t *testing.T) {
 			req := httptest.NewRequest("POST", "/events", strings.NewReader(validEvent))
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return too many requests status", func() {
+			convey.Convey("Then it should return too many requests status", func() {
 				handler.HandlePostEvent(w, req)
-				So(w.Code, ShouldEqual, http.StatusTooManyRequests)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusTooManyRequests)
 
 				var response errorResponse
 				err := json.NewDecoder(w.Body).Decode(&response)
-				So(err, ShouldBeNil)
-				So(response.Code, ShouldEqual, "backpressure")
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(response.Code, convey.ShouldEqual, "backpressure")
 			})
 		})
 	})
 }
 
 func TestLeaderboardHandler_HandleGetLeaderboard(t *testing.T) {
-	Convey("Given a leaderboard handler", t, func() {
+	convey.Convey("Given a leaderboard handler", t, func() {
 		mockLB := &mockLeaderboard{
 			topN: []types.Entry{
 				{Rank: 1, TalentID: "talent-1", Score: 100.0},
@@ -438,74 +438,74 @@ func TestLeaderboardHandler_HandleGetLeaderboard(t *testing.T) {
 		}
 		handler := api.NewLeaderboardHandler(deps)
 
-		Convey("When requesting top N entries", func() {
-			req := httptest.NewRequest("GET", "/leaderboard?limit=2", nil)
+		convey.Convey("When requesting top N entries", func() {
+			req := httptest.NewRequest("GET", "/leaderboard?limit=2", http.NoBody)
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return the top N entries", func() {
+			convey.Convey("Then it should return the top N entries", func() {
 				handler.HandleGetLeaderboard(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 
 				var response []types.Entry
 				err := json.NewDecoder(w.Body).Decode(&response)
-				So(err, ShouldBeNil)
-				So(len(response), ShouldEqual, 2)
-				So(response[0].TalentID, ShouldEqual, "talent-1")
-				So(response[1].TalentID, ShouldEqual, "talent-2")
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(len(response), convey.ShouldEqual, 2)
+				convey.So(response[0].TalentID, convey.ShouldEqual, "talent-1")
+				convey.So(response[1].TalentID, convey.ShouldEqual, "talent-2")
 			})
 		})
 
-		Convey("When no limit is specified", func() {
-			req := httptest.NewRequest("GET", "/leaderboard", nil)
+		convey.Convey("When no limit is specified", func() {
+			req := httptest.NewRequest("GET", "/leaderboard", http.NoBody)
 			w := httptest.NewRecorder()
 
 			handler.HandleGetLeaderboard(w, req)
 
-			Convey("Then it should return 400 Bad Request", func() {
-				So(w.Code, ShouldEqual, http.StatusBadRequest)
+			convey.Convey("Then it should return 400 Bad Request", func() {
+				convey.So(w.Code, convey.ShouldEqual, http.StatusBadRequest)
 			})
 		})
 
-		Convey("When leaderboard returns an error", func() {
+		convey.Convey("When leaderboard returns an error", func() {
 			mockLB.topNErr = fmt.Errorf("database error")
-			req := httptest.NewRequest("GET", "/leaderboard?limit=10", nil)
+			req := httptest.NewRequest("GET", "/leaderboard?limit=10", http.NoBody)
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return internal server error", func() {
+			convey.Convey("Then it should return internal server error", func() {
 				handler.HandleGetLeaderboard(w, req)
-				So(w.Code, ShouldEqual, http.StatusInternalServerError)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusInternalServerError)
 			})
 		})
 	})
 }
 
 func TestRankHandler_HandleGetRank(t *testing.T) {
-	Convey("Given a rank handler", t, func() {
+	convey.Convey("Given a rank handler", t, func() {
 		mockLB := &mockLeaderboard{
 			rank: types.Entry{Rank: 5, TalentID: "talent-123", Score: 85.0},
 		}
 		handler := api.NewRankHandler(mockLB)
 
-		Convey("When requesting rank for existing talent", func() {
-			req := httptest.NewRequest("GET", "/rank/talent-123", nil)
+		convey.Convey("When requesting rank for existing talent", func() {
+			req := httptest.NewRequest("GET", "/rank/talent-123", http.NoBody)
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return the rank information", func() {
+			convey.Convey("Then it should return the rank information", func() {
 				handler.HandleGetRank(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
-				So(w.Header().Get("Content-Type"), ShouldContainSubstring, "application/json")
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
+				convey.So(w.Header().Get("Content-Type"), convey.ShouldContainSubstring, "application/json")
 
 				var response types.Entry
 				err := json.NewDecoder(w.Body).Decode(&response)
-				So(err, ShouldBeNil)
-				So(response.TalentID, ShouldEqual, "talent-123")
-				So(response.Rank, ShouldEqual, 5)
-				So(response.Score, ShouldEqual, 85.0)
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(response.TalentID, convey.ShouldEqual, "talent-123")
+				convey.So(response.Rank, convey.ShouldEqual, 5)
+				convey.So(response.Score, convey.ShouldEqual, 85.0)
 			})
 		})
 
-		Convey("When requesting rank for non-existent talent", func() {
-			req := httptest.NewRequest("GET", "/rank/nonexistent", nil)
+		convey.Convey("When requesting rank for non-existent talent", func() {
+			req := httptest.NewRequest("GET", "/rank/nonexistent", http.NoBody)
 			w := httptest.NewRecorder()
 
 			// Mock the error response
@@ -513,13 +513,13 @@ func TestRankHandler_HandleGetRank(t *testing.T) {
 
 			handler.HandleGetRank(w, req)
 
-			Convey("Then it should return not found status", func() {
-				So(w.Code, ShouldEqual, http.StatusNotFound)
+			convey.Convey("Then it should return not found status", func() {
+				convey.So(w.Code, convey.ShouldEqual, http.StatusNotFound)
 			})
 		})
 
-		Convey("When leaderboard returns other error", func() {
-			req := httptest.NewRequest("GET", "/rank/talent-123", nil)
+		convey.Convey("When leaderboard returns other error", func() {
+			req := httptest.NewRequest("GET", "/rank/talent-123", http.NoBody)
 			w := httptest.NewRecorder()
 
 			// Mock the error response
@@ -527,31 +527,31 @@ func TestRankHandler_HandleGetRank(t *testing.T) {
 
 			handler.HandleGetRank(w, req)
 
-			Convey("Then it should return internal server error", func() {
-				So(w.Code, ShouldEqual, http.StatusInternalServerError)
+			convey.Convey("Then it should return internal server error", func() {
+				convey.So(w.Code, convey.ShouldEqual, http.StatusInternalServerError)
 			})
 		})
 	})
 }
 
 func TestHealthHandler_HandleHealth(t *testing.T) {
-	Convey("Given a health handler", t, func() {
+	convey.Convey("Given a health handler", t, func() {
 		handler := api.NewHealthHandler()
 
-		Convey("When handling health check request", func() {
-			req := httptest.NewRequest("GET", "/healthz", nil)
+		convey.Convey("When handling health check request", func() {
+			req := httptest.NewRequest("GET", "/healthz", http.NoBody)
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return OK status", func() {
+			convey.Convey("Then it should return OK status", func() {
 				handler.HandleHealth(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 			})
 		})
 	})
 }
 
 func TestStatsHandler_HandleStats(t *testing.T) {
-	Convey("Given a stats handler", t, func() {
+	convey.Convey("Given a stats handler", t, func() {
 		mockStats := &mockStatsProvider{
 			stats: map[string]interface{}{
 				"total_events": 1000,
@@ -560,19 +560,19 @@ func TestStatsHandler_HandleStats(t *testing.T) {
 		}
 		handler := api.NewStatsHandler(mockStats)
 
-		Convey("When handling stats request", func() {
-			req := httptest.NewRequest("GET", "/stats", nil)
+		convey.Convey("When handling stats request", func() {
+			req := httptest.NewRequest("GET", "/stats", http.NoBody)
 			w := httptest.NewRecorder()
 
-			Convey("Then it should return stats", func() {
+			convey.Convey("Then it should return stats", func() {
 				handler.HandleStats(w, req)
-				So(w.Code, ShouldEqual, http.StatusOK)
+				convey.So(w.Code, convey.ShouldEqual, http.StatusOK)
 
 				var response map[string]interface{}
 				err := json.NewDecoder(w.Body).Decode(&response)
-				So(err, ShouldBeNil)
-				So(response["total_events"], ShouldEqual, 1000)
-				So(response["active_users"], ShouldEqual, 150)
+				convey.So(err, convey.ShouldBeNil)
+				convey.So(response["total_events"], convey.ShouldEqual, 1000)
+				convey.So(response["active_users"], convey.ShouldEqual, 150)
 			})
 		})
 	})

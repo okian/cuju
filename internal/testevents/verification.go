@@ -3,13 +3,14 @@ package testevents
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
+
+	"github.com/okian/cuju/pkg/logger"
 )
 
 // verifyResults verifies the consistency of rankings and leaderboard.
-func verifyResults(ctx context.Context, config *Config, rankings, leaderboard []Entry, stats *Stats) error {
-	log.Println("🔍 Verifying results...")
+func verifyResults(ctx context.Context, config *Config, rankings, leaderboard []Entry, _ *Stats) error {
+	logger.Get().Info(ctx, "verifying results")
 
 	if len(rankings) == 0 {
 		return fmt.Errorf("no rankings to verify")
@@ -25,16 +26,16 @@ func verifyResults(ctx context.Context, config *Config, rankings, leaderboard []
 	// Verify leaderboard consistency if we have leaderboard data
 	if len(leaderboard) > 0 {
 		if err := verifyLeaderboardConsistency(sortedRankings, leaderboard); err != nil {
-			log.Printf("⚠️  Leaderboard consistency warning: %v", err)
+			logger.Get().Warn(ctx, "leaderboard consistency warning", logger.Error(err))
 		} else {
-			log.Println("✅ Leaderboard consistency verified")
+			logger.Get().Info(ctx, "leaderboard consistency verified")
 		}
 	}
 
 	// Display top performers
 	displayTopPerformers(sortedRankings, leaderboard, config.Verbose)
 
-	log.Println("✅ Result verification completed")
+	logger.Get().Info(ctx, "result verification completed")
 	return nil
 }
 
@@ -76,10 +77,13 @@ func displayTopPerformers(sortedRankings, leaderboard []Entry, verbose bool) {
 		topN = len(sortedRankings)
 	}
 
-	log.Printf("🏆 Top %d performers from rankings:", topN)
+	logger.Get().Info(context.Background(), "top performers from rankings", logger.Int("topN", topN))
 	for i := 0; i < topN; i++ {
 		entry := sortedRankings[i]
-		log.Printf("   %d. %s - Score: %.3f", i+1, entry.TalentID, entry.Score)
+		logger.Get().Info(context.Background(), "ranking entry",
+			logger.Int("rank", i+1),
+			logger.String("talentID", entry.TalentID),
+			logger.Float64("score", entry.Score))
 	}
 
 	if len(leaderboard) > 0 {
@@ -88,10 +92,13 @@ func displayTopPerformers(sortedRankings, leaderboard []Entry, verbose bool) {
 			leaderboardTopN = len(leaderboard)
 		}
 
-		log.Printf("🥇 Top %d performers from leaderboard:", leaderboardTopN)
+		logger.Get().Info(context.Background(), "top performers from leaderboard", logger.Int("topN", leaderboardTopN))
 		for i := 0; i < leaderboardTopN; i++ {
 			entry := leaderboard[i]
-			log.Printf("   %d. %s - Score: %.3f", i+1, entry.TalentID, entry.Score)
+			logger.Get().Info(context.Background(), "leaderboard entry",
+				logger.Int("rank", i+1),
+				logger.String("talentID", entry.TalentID),
+				logger.Float64("score", entry.Score))
 		}
 	}
 
@@ -102,11 +109,10 @@ func displayTopPerformers(sortedRankings, leaderboard []Entry, verbose bool) {
 			maxScore := sortedRankings[0].Score
 			minScore := sortedRankings[len(sortedRankings)-1].Score
 
-			log.Printf(`📊 Score statistics:
-   Average: %.3f
-   Maximum: %.3f
-   Minimum: %.3f
-`, avgScore, maxScore, minScore)
+			logger.Get().Info(context.Background(), "score statistics",
+				logger.Float64("average", avgScore),
+				logger.Float64("maximum", maxScore),
+				logger.Float64("minimum", minScore))
 		}
 	}
 }

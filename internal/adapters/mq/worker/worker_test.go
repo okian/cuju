@@ -12,7 +12,7 @@ import (
 	worker "github.com/okian/cuju/internal/adapters/mq/worker"
 	model "github.com/okian/cuju/internal/domain/model"
 	logging "github.com/okian/cuju/pkg/logger"
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/smartystreets/goconvey/convey"
 )
 
 // Mock implementations for testing.
@@ -36,7 +36,7 @@ func (mq *mockQueue) Close() error {
 	return mq.closeError
 }
 
-func (mq *mockQueue) addEvent(event queue.Event) {
+func (mq *mockQueue) addEvent(event queue.Event) { //nolint:gocritic // hugeParam: Event must be passed by value for channel semantics
 	mq.eventChan <- event
 }
 
@@ -103,7 +103,7 @@ func (mu *mockUpdater) UpdateBest(ctx context.Context, talentID string, score fl
 	return true, nil
 }
 
-func (mu *mockUpdater) UpdateBestWithMeta(ctx context.Context, talentID string, score float64, eventID string, skill string, rawMetric float64) (bool, error) {
+func (mu *mockUpdater) UpdateBestWithMeta(ctx context.Context, talentID string, score float64, eventID, skill string, rawMetric float64) (bool, error) {
 	// For tests, just delegate to UpdateBest
 	return mu.UpdateBest(ctx, talentID, score)
 }
@@ -122,7 +122,7 @@ func (mu *mockUpdater) getUpdate(talentID string) (float64, bool) {
 }
 
 func TestInMemoryWorker(t *testing.T) {
-	Convey("Given a new InMemoryWorker", t, func() {
+	convey.Convey("Given a new InMemoryWorker", t, func() {
 		// Initialize logging for tests
 		_ = logging.Init()
 
@@ -130,26 +130,26 @@ func TestInMemoryWorker(t *testing.T) {
 		scorer := newMockScorer()
 		updater := newMockUpdater()
 
-		Convey("When creating a worker with default options", func() {
+		convey.Convey("When creating a worker with default options", func() {
 			worker := worker.NewInMemoryWorker(queue, scorer, updater)
 
-			Convey("Then it should be created successfully", func() {
-				So(worker, ShouldNotBeNil)
+			convey.Convey("Then it should be created successfully", func() {
+				convey.So(worker, convey.ShouldNotBeNil)
 			})
 		})
 
-		Convey("When creating a worker with custom options", func() {
+		convey.Convey("When creating a worker with custom options", func() {
 			worker := worker.NewInMemoryWorker(
 				queue, scorer, updater,
 				worker.WithName("test-worker"),
 			)
 
-			Convey("Then it should be created successfully", func() {
-				So(worker, ShouldNotBeNil)
+			convey.Convey("Then it should be created successfully", func() {
+				convey.So(worker, convey.ShouldNotBeNil)
 			})
 		})
 
-		Convey("When running a worker", func() {
+		convey.Convey("When running a worker", func() {
 			worker := worker.NewInMemoryWorker(queue, scorer, updater)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -160,7 +160,7 @@ func TestInMemoryWorker(t *testing.T) {
 			// Give worker time to start
 			time.Sleep(10 * time.Millisecond)
 
-			Convey("And when processing events", func() {
+			convey.Convey("And when processing events", func() {
 				event := model.Event{
 					EventID:   "event-1",
 					TalentID:  "talent-1",
@@ -178,14 +178,14 @@ func TestInMemoryWorker(t *testing.T) {
 				// Give worker time to process
 				time.Sleep(50 * time.Millisecond)
 
-				Convey("Then it should update the leaderboard", func() {
+				convey.Convey("Then it should update the leaderboard", func() {
 					score, updated := updater.getUpdate("talent-1")
-					So(updated, ShouldBeTrue)
-					So(score, ShouldEqual, 85.0)
+					convey.So(updated, convey.ShouldBeTrue)
+					convey.So(score, convey.ShouldEqual, 85.0)
 				})
 			})
 
-			Convey("And when scoring fails", func() {
+			convey.Convey("And when scoring fails", func() {
 				event := model.Event{
 					EventID:   "event-2",
 					TalentID:  "talent-2",
@@ -203,13 +203,13 @@ func TestInMemoryWorker(t *testing.T) {
 				// Give worker time to process
 				time.Sleep(50 * time.Millisecond)
 
-				Convey("Then it should not update the leaderboard", func() {
+				convey.Convey("Then it should not update the leaderboard", func() {
 					_, updated := updater.getUpdate("talent-2")
-					So(updated, ShouldBeFalse)
+					convey.So(updated, convey.ShouldBeFalse)
 				})
 			})
 
-			Convey("And when updating fails", func() {
+			convey.Convey("And when updating fails", func() {
 				event := model.Event{
 					EventID:   "event-3",
 					TalentID:  "talent-3",
@@ -227,25 +227,25 @@ func TestInMemoryWorker(t *testing.T) {
 				// Give worker time to process
 				time.Sleep(50 * time.Millisecond)
 
-				Convey("Then it should not update the leaderboard", func() {
+				convey.Convey("Then it should not update the leaderboard", func() {
 					_, updated := updater.getUpdate("talent-3")
-					So(updated, ShouldBeFalse)
+					convey.So(updated, convey.ShouldBeFalse)
 				})
 			})
 
-			Convey("And when shutting down", func() {
+			convey.Convey("And when shutting down", func() {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 				defer shutdownCancel()
 
 				err := worker.Shutdown(shutdownCtx)
 
-				Convey("Then it should shutdown gracefully", func() {
-					So(err, ShouldBeNil)
+				convey.Convey("Then it should shutdown gracefully", func() {
+					convey.So(err, convey.ShouldBeNil)
 				})
 			})
 		})
 
-		Convey("When context is cancelled", func() {
+		convey.Convey("When context is cancelled", func() {
 			worker := worker.NewInMemoryWorker(queue, scorer, updater)
 			ctx, cancel := context.WithCancel(context.Background())
 
@@ -261,16 +261,16 @@ func TestInMemoryWorker(t *testing.T) {
 			// Give worker time to stop
 			time.Sleep(50 * time.Millisecond)
 
-			Convey("Then worker should stop", func() {
+			convey.Convey("Then worker should stop", func() {
 				// Worker should have stopped due to context cancellation
-				So(true, ShouldBeTrue) // Placeholder assertion
+				convey.So(true, convey.ShouldBeTrue) // Placeholder assertion
 			})
 		})
 	})
 }
 
 func TestWorkerPool(t *testing.T) {
-	Convey("Given a new WorkerPool", t, func() {
+	convey.Convey("Given a new WorkerPool", t, func() {
 		// Initialize logging for tests
 		_ = logging.Init()
 
@@ -278,25 +278,25 @@ func TestWorkerPool(t *testing.T) {
 		scorer := newMockScorer()
 		updater := newMockUpdater()
 
-		Convey("When creating a worker pool with default count", func() {
-			pool := worker.NewWorkerPool(0, queue, scorer, updater)
+		convey.Convey("When creating a worker pool with default count", func() {
+			pool := worker.NewPool(0, queue, scorer, updater)
 
-			Convey("Then it should be created successfully", func() {
-				So(pool, ShouldNotBeNil)
+			convey.Convey("Then it should be created successfully", func() {
+				convey.So(pool, convey.ShouldNotBeNil)
 			})
 		})
 
-		Convey("When creating a worker pool with custom count", func() {
+		convey.Convey("When creating a worker pool with custom count", func() {
 			workerCount := 3
-			pool := worker.NewWorkerPool(workerCount, queue, scorer, updater)
+			pool := worker.NewPool(workerCount, queue, scorer, updater)
 
-			Convey("Then it should be created successfully", func() {
-				So(pool, ShouldNotBeNil)
+			convey.Convey("Then it should be created successfully", func() {
+				convey.So(pool, convey.ShouldNotBeNil)
 			})
 		})
 
-		Convey("When starting a worker pool", func() {
-			pool := worker.NewWorkerPool(2, queue, scorer, updater)
+		convey.Convey("When starting a worker pool", func() {
+			pool := worker.NewPool(2, queue, scorer, updater)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -305,7 +305,7 @@ func TestWorkerPool(t *testing.T) {
 			// Give workers time to start
 			time.Sleep(20 * time.Millisecond)
 
-			Convey("And when processing multiple events", func() {
+			convey.Convey("And when processing multiple events", func() {
 				events := []model.Event{
 					{EventID: "event-1", TalentID: "talent-1", RawMetric: 100.0, Skill: "programming", TS: time.Now()},
 					{EventID: "event-2", TalentID: "talent-2", RawMetric: 95.0, Skill: "design", TS: time.Now()},
@@ -325,29 +325,29 @@ func TestWorkerPool(t *testing.T) {
 				// Give workers time to process
 				time.Sleep(100 * time.Millisecond)
 
-				Convey("Then all events should be processed", func() {
+				convey.Convey("Then all events should be processed", func() {
 					for _, event := range events {
 						score, updated := updater.getUpdate(event.TalentID)
-						So(updated, ShouldBeTrue)
-						So(score, ShouldBeGreaterThan, 0)
+						convey.So(updated, convey.ShouldBeTrue)
+						convey.So(score, convey.ShouldBeGreaterThan, 0)
 					}
 				})
 			})
 
-			Convey("And when shutting down", func() {
+			convey.Convey("And when shutting down", func() {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				defer shutdownCancel()
 
 				err := pool.Shutdown(shutdownCtx)
 
-				Convey("Then it should shutdown gracefully", func() {
-					So(err, ShouldBeNil)
+				convey.Convey("Then it should shutdown gracefully", func() {
+					convey.So(err, convey.ShouldBeNil)
 				})
 			})
 		})
 
-		Convey("When stopping a worker pool", func() {
-			pool := worker.NewWorkerPool(2, queue, scorer, updater)
+		convey.Convey("When stopping a worker pool", func() {
+			pool := worker.NewPool(2, queue, scorer, updater)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -361,24 +361,24 @@ func TestWorkerPool(t *testing.T) {
 			// Give workers time to stop
 			time.Sleep(50 * time.Millisecond)
 
-			Convey("Then all workers should be stopped", func() {
+			convey.Convey("Then all workers should be stopped", func() {
 				// Workers should have stopped
-				So(true, ShouldBeTrue) // Placeholder assertion
+				convey.So(true, convey.ShouldBeTrue) // Placeholder assertion
 			})
 		})
 	})
 }
 
 func TestWorkerOptions(t *testing.T) {
-	Convey("Given worker options", t, func() {
-		Convey("When using WithName", func() {
-			Convey("Then it should set the worker name", func() {
+	convey.Convey("Given worker options", t, func() {
+		convey.Convey("When using WithName", func() {
+			convey.Convey("Then it should set the worker name", func() {
 				queue := newMockQueue()
 				scorer := newMockScorer()
 				updater := newMockUpdater()
 				worker := worker.NewInMemoryWorker(queue, scorer, updater, worker.WithName("test-worker"))
 				// Note: Can't test unexported fields directly
-				So(worker, ShouldNotBeNil)
+				convey.So(worker, convey.ShouldNotBeNil)
 			})
 		})
 
@@ -387,7 +387,7 @@ func TestWorkerOptions(t *testing.T) {
 }
 
 func TestWorkerConcurrency(t *testing.T) {
-	Convey("Given a worker pool with multiple workers", t, func() {
+	convey.Convey("Given a worker pool with multiple workers", t, func() {
 		// Initialize logging for tests
 		_ = logging.Init()
 
@@ -395,7 +395,7 @@ func TestWorkerConcurrency(t *testing.T) {
 		scorer := newMockScorer()
 		updater := newMockUpdater()
 
-		pool := worker.NewWorkerPool(4, queue, scorer, updater)
+		pool := worker.NewPool(4, queue, scorer, updater)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -404,7 +404,7 @@ func TestWorkerConcurrency(t *testing.T) {
 		// Give workers time to start
 		time.Sleep(20 * time.Millisecond)
 
-		Convey("When processing many concurrent events", func() {
+		convey.Convey("When processing many concurrent events", func() {
 			const eventCount = 100
 			var wg sync.WaitGroup
 
@@ -435,7 +435,7 @@ func TestWorkerConcurrency(t *testing.T) {
 			// Give workers time to process
 			time.Sleep(200 * time.Millisecond)
 
-			Convey("Then all events should be processed", func() {
+			convey.Convey("Then all events should be processed", func() {
 				// Check that all events were processed
 				processedCount := 0
 				for i := 0; i < 5; i++ {
@@ -446,14 +446,14 @@ func TestWorkerConcurrency(t *testing.T) {
 						}
 					}
 				}
-				So(processedCount, ShouldEqual, eventCount)
+				convey.So(processedCount, convey.ShouldEqual, eventCount)
 			})
 		})
 	})
 }
 
 func TestWorkerErrorHandling(t *testing.T) {
-	Convey("Given a worker with error conditions", t, func() {
+	convey.Convey("Given a worker with error conditions", t, func() {
 		// Initialize logging for tests
 		_ = logging.Init()
 
@@ -471,7 +471,7 @@ func TestWorkerErrorHandling(t *testing.T) {
 		// Give worker time to start
 		time.Sleep(10 * time.Millisecond)
 
-		Convey("When scoring consistently fails", func() {
+		convey.Convey("When scoring consistently fails", func() {
 			event := model.Event{
 				EventID:   "event-error",
 				TalentID:  "talent-error",
@@ -489,13 +489,13 @@ func TestWorkerErrorHandling(t *testing.T) {
 			// Give worker time to process
 			time.Sleep(50 * time.Millisecond)
 
-			Convey("Then it should not update the leaderboard", func() {
+			convey.Convey("Then it should not update the leaderboard", func() {
 				_, updated := updater.getUpdate("talent-error")
-				So(updated, ShouldBeFalse)
+				convey.So(updated, convey.ShouldBeFalse)
 			})
 		})
 
-		Convey("When updating consistently fails", func() {
+		convey.Convey("When updating consistently fails", func() {
 			event := model.Event{
 				EventID:   "event-update-error",
 				TalentID:  "talent-update-error",
@@ -513,22 +513,22 @@ func TestWorkerErrorHandling(t *testing.T) {
 			// Give worker time to process
 			time.Sleep(50 * time.Millisecond)
 
-			Convey("Then it should not update the leaderboard", func() {
+			convey.Convey("Then it should not update the leaderboard", func() {
 				_, updated := updater.getUpdate("talent-update-error")
-				So(updated, ShouldBeFalse)
+				convey.So(updated, convey.ShouldBeFalse)
 			})
 		})
 
-		Convey("When queue channel is closed", func() {
+		convey.Convey("When queue channel is closed", func() {
 			// Close the queue
 			_ = queue.Close()
 
 			// Give worker time to detect closure
 			time.Sleep(50 * time.Millisecond)
 
-			Convey("Then worker should stop", func() {
+			convey.Convey("Then worker should stop", func() {
 				// Worker should have stopped due to queue closure
-				So(true, ShouldBeTrue) // Placeholder assertion
+				convey.So(true, convey.ShouldBeTrue) // Placeholder assertion
 			})
 		})
 	})

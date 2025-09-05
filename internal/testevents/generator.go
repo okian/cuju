@@ -4,22 +4,64 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/okian/cuju/pkg/logger"
+)
+
+// Constants for random number generation.
+const (
+	randomFloatDivisor = 1000000
+	eventIDDivisor     = 10000
+	skillTypeDivisor   = 8
+)
+
+// Constants for metric generation ranges.
+const (
+	avgPerformerMin     = 3.0
+	avgPerformerRange   = 4.0
+	highPerformerMin    = 7.0
+	highPerformerRange  = 2.0
+	lowPerformerMin     = 0.1
+	lowPerformerRange   = 2.9
+	elitePerformerMin   = 9.0
+	elitePerformerMax   = 10.0
+	elitePerformerRange = 1.0
+	veryLowMin          = 0.1
+	veryLowRange        = 0.9
+	midPerformerMin     = 6.0
+	midPerformerRange   = 2.0
+	goodPerformerMin    = 2.0
+	goodPerformerRange  = 2.0
+	wideRangeMin        = 0.1
+	wideRangeMax        = 10.0
+	wideRange           = 9.9
+)
+
+// Constants for performance type cases.
+const (
+	caseAveragePerformer = 0
+	caseHighPerformer    = 1
+	caseLowPerformer     = 2
+	caseElitePerformer   = 3
+	caseVeryLowPerformer = 4
+	caseMidHighPerformer = 5
+	caseMidLowPerformer  = 6
+	caseWideRange        = 7
 )
 
 // getRandomFloat returns a random float64 between 0.0 and 1.0 using crypto/rand.
 func getRandomFloat() float64 {
-	n, _ := rand.Int(rand.Reader, big.NewInt(1000000))
-	return float64(n.Int64()) / 1000000.0
+	n, _ := rand.Int(rand.Reader, big.NewInt(randomFloatDivisor))
+	return float64(n.Int64()) / float64(randomFloatDivisor)
 }
 
 // generateEvents creates the specified number of events with unique talent IDs.
 func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event, error) {
-	log.Printf("🎲 Generating %d events with unique talent IDs...", config.NumEvents)
+	logger.Get().Info(ctx, "generating events with unique talent IDs", logger.Int("numEvents", config.NumEvents))
 
 	events := make([]Event, config.NumEvents)
 	// rand.Seed is deprecated in Go 1.20+, using default source
@@ -40,7 +82,7 @@ func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event,
 	resultChan := make(chan eventResult, config.NumEvents)
 
 	// Use worker pool for event generation
-	workerCount := min(config.Workers, config.NumEvents)
+	workerCount := minInt(config.Workers, config.NumEvents)
 	eventsPerWorker := config.NumEvents / workerCount
 
 	for worker := 0; worker < workerCount; worker++ {
@@ -50,15 +92,15 @@ func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event,
 			end = config.NumEvents // Last worker gets remaining events
 		}
 
-		go func(workerID, start, end int) {
+		go func(_ int, start, end int) {
 			for i := start; i < end; i++ {
 				select {
 				case <-ctx.Done():
 					resultChan <- eventResult{index: i, err: ctx.Err()}
 					return
 				default:
-					event, err := generateSingleEvent(i, talentIDs[i])
-					resultChan <- eventResult{index: i, event: event, err: err}
+					event := generateSingleEvent(i, talentIDs[i])
+					resultChan <- eventResult{index: i, event: event, err: nil}
 				}
 			}
 		}(worker, start, end)
@@ -68,7 +110,7 @@ func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event,
 	for i := 0; i < config.NumEvents; i++ {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("context cancelled during event generation: %w", ctx.Err())
 		case result := <-resultChan:
 			if result.err != nil {
 				return nil, fmt.Errorf("failed to generate event %d: %w", result.index, result.err)
@@ -78,13 +120,13 @@ func generateEvents(ctx context.Context, config *Config, stats *Stats) ([]Event,
 	}
 
 	stats.EventsGenerated = len(events)
-	log.Printf("✅ Generated %d events successfully", len(events))
+	logger.Get().Info(ctx, "generated events successfully", logger.Int("count", len(events)))
 
 	return events, nil
 }
 
 // generateSingleEvent creates a single event with the given index and talent ID.
-func generateSingleEvent(index int, talentID string) (Event, error) {
+func generateSingleEvent(index int, talentID string) Event {
 	// Generate varied metric distribution (similar to shell script)
 	rawMetric := generateVariedMetric()
 
@@ -95,8 +137,8 @@ func generateSingleEvent(index int, talentID string) (Event, error) {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 
 	// Generate unique event ID
-	randNum, _ := rand.Int(rand.Reader, big.NewInt(10000))
-	eventID := fmt.Sprintf("event_%04d_%d_%d", index, time.Now().Unix(), randNum.Int64())
+	randNum, _ := rand.Int(rand.Reader, big.NewInt(eventIDDivisor))
+	eventID := "event_" + strconv.FormatInt(int64(index), 10) + "_" + strconv.FormatInt(time.Now().Unix(), 10) + "_" + strconv.FormatInt(randNum.Int64(), 10)
 
 	return Event{
 		EventID:   eventID,
@@ -104,45 +146,45 @@ func generateSingleEvent(index int, talentID string) (Event, error) {
 		RawMetric: rawMetric,
 		Skill:     skill,
 		TS:        timestamp,
-	}, nil
+	}
 }
 
 // generateVariedMetric creates a metric with varied distribution.
 func generateVariedMetric() float64 {
 	// Use the same distribution logic as the shell script
-	randNum, _ := rand.Int(rand.Reader, big.NewInt(8))
+	randNum, _ := rand.Int(rand.Reader, big.NewInt(skillTypeDivisor))
 	switch randNum.Int64() {
-	case 0:
+	case caseAveragePerformer:
 		// Average performers (3.0 - 7.0) - most common
-		return 3.0 + getRandomFloat()*4.0
-	case 1:
+		return avgPerformerMin + getRandomFloat()*avgPerformerRange
+	case caseHighPerformer:
 		// High performers (7.0 - 9.0)
-		return 7.0 + getRandomFloat()*2.0
-	case 2:
+		return highPerformerMin + getRandomFloat()*highPerformerRange
+	case caseLowPerformer:
 		// Low performers (0.1 - 3.0)
-		return 0.1 + getRandomFloat()*2.9
-	case 3:
+		return lowPerformerMin + getRandomFloat()*lowPerformerRange
+	case caseElitePerformer:
 		// Elite performers (9.0 - 10.0) - rare
-		return 9.0 + getRandomFloat()*1.0
-	case 4:
+		return elitePerformerMin + getRandomFloat()*elitePerformerRange
+	case caseVeryLowPerformer:
 		// Very low performers (0.1 - 1.0) - rare
-		return 0.1 + getRandomFloat()*0.9
-	case 5:
+		return veryLowMin + getRandomFloat()*veryLowRange
+	case caseMidHighPerformer:
 		// Mid-high performers (6.0 - 8.0)
-		return 6.0 + getRandomFloat()*2.0
-	case 6:
+		return midPerformerMin + getRandomFloat()*midPerformerRange
+	case caseMidLowPerformer:
 		// Mid-low performers (2.0 - 4.0)
-		return 2.0 + getRandomFloat()*2.0
-	case 7:
+		return goodPerformerMin + getRandomFloat()*goodPerformerRange
+	case caseWideRange:
 		// Random across full range (0.1 - 10.0)
-		return 0.1 + getRandomFloat()*9.9
+		return wideRangeMin + getRandomFloat()*wideRange
 	default:
-		return 0.1 + getRandomFloat()*9.9
+		return wideRangeMin + getRandomFloat()*wideRange
 	}
 }
 
-// min returns the minimum of two integers.
-func min(a, b int) int {
+// minInt returns the minimum of two integers.
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

@@ -1,22 +1,35 @@
 package testevents
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"time"
+
+	"github.com/okian/cuju/pkg/logger"
+)
+
+// File permission constants.
+const (
+	logFilePermission = 0600
 )
 
 // SetupLogging configures logging to both console and file.
 // If logFile is empty, a timestamped filename is generated.
 func SetupLogging(logFile string) error {
-	if logFile == "" {
-		timestamp := time.Now().Format("20060102_150405")
-		logFile = fmt.Sprintf("test_log_%s.log", timestamp)
+	// Initialize the logger first
+	if err := logger.Init(); err != nil {
+		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600) //nolint:gosec // log file permissions
+	if logFile == "" {
+		timestamp := time.Now().Format("20060102_150405")
+		logFile = "test_log_" + timestamp + ".log"
+	}
+
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, logFilePermission)
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
@@ -24,13 +37,13 @@ func SetupLogging(logFile string) error {
 	multiWriter := io.MultiWriter(os.Stdout, file)
 	log.SetOutput(multiWriter)
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	log.Printf("📝 Logging to file: %s", logFile)
+	logger.Get().Info(context.Background(), "logging to file", logger.String("logFile", logFile))
 	return nil
 }
 
 // ShowHelp prints usage information for the test events tool.
 func ShowHelp() {
-	log.Print(`Cuju Event Test Tool
+	os.Stdout.WriteString(`Cuju Event Test Tool
 ===================
 
 A high-performance concurrent tool for testing the Cuju event processing system.

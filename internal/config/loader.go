@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -26,7 +27,7 @@ func Load(ctx context.Context) (*Config, error) {
 	// Load from file if provided
 	if path := os.Getenv("CUJU_CONFIG"); path != "" {
 		if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to load config file %s: %w", path, err)
 		}
 	}
 
@@ -39,13 +40,13 @@ func Load(ctx context.Context) (*Config, error) {
 		return s
 	})
 	if err := k.Load(envProvider, nil); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load environment variables: %w", err)
 	}
 
 	// Unmarshal into a copy
 	cfg := *base
 	if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	// Basic validation

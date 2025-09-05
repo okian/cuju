@@ -169,12 +169,6 @@ components:
         duplicate:
           type: boolean
           example: false
-    Health:
-      type: object
-      properties:
-        status:
-          type: string
-          example: ok
     Error:
       type: object
       required: [code, message]
