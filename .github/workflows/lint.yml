@@ -50,9 +50,6 @@ jobs:
     - name: Format code
       run: make fmt
 
-    - name: Run go vet
-      run: make vet
-
     - name: Run golangci-lint
       run: make lint
 
