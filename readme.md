@@ -225,7 +225,7 @@ go test -v -bench=BenchmarkTreapStore_30MTalents_ComprehensiveStressTest \
 **Time Complexities:**
 * Event Submission: **O(1)** - Hash map lookup + channel send
 * Leaderboard Query: **O(log n + N)** - Treap in-order traversal
-* Rank Lookup: **O(log n)** - Single treap rank calculation
+* Rank Lookup: **O(1)** - Snapshot-based lookup
 * Update Operations: **O(log n)** - Treap insert/update
 
 **Scale:**

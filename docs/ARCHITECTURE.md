@@ -76,7 +76,7 @@ Dependencies are injected through interfaces, enabling easy testing and swapping
 **Time Complexities**:
 - `UpdateBest()`: **O(log n)** - Insert/update in treap
 - `TopN()`: **O(log n + N)** - In-order traversal with limit
-- `Rank()`: **O(log n)** - In-order traversal to find rank
+- `Rank()`: **O(1)** - Snapshot-based lookup (fallback O(log n))
 - `Count()`: **O(1)** - Direct count from map
 
 **Space Complexity**: **O(N)** where N is total number of talents
@@ -330,8 +330,8 @@ sequenceDiagram
 {"rank": 5, "talent_id": "t1", "score": 78.9}
 ```
 
-**Time Complexity**: **O(log n)**
-- In-order traversal to find rank: O(log n)
+**Time Complexity**: **O(1)**
+- Snapshot-based lookup: O(1) (fallback O(log n) if snapshot missing)
 
 **Error Handling**: Returns 404 if talent not found
 
@@ -397,7 +397,7 @@ sequenceDiagram
 
 **Choice**: Treap (Tree + Heap)
 **Rationale**:
-- **Pros**: O(log n) insert/delete, O(log n) rank queries, self-balancing
+- **Pros**: O(log n) insert/delete, O(1) rank queries, self-balancing
 - **Cons**: More complex than simple sorted array
 - **Trade-off**: Balanced performance for all operations
 

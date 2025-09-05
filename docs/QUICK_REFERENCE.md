@@ -18,7 +18,7 @@ export CUJU_CONFIG=./config.yaml
 |----------|--------|---------|-----------------|
 | `/events` | POST | Submit performance event | O(1) |
 | `/leaderboard?limit=N` | GET | Get top N leaderboard | O(log n + N) |
-| `/rank/{talent_id}` | GET | Get talent rank | O(log n) |
+| `/rank/{talent_id}` | GET | Get talent rank | O(1) |
 | `/healthz` | GET | Health check (Prometheus metrics) | O(1) |
 | `/stats` | GET | Service statistics | O(1) |
 | `/dashboard` | GET | Web monitoring dashboard | O(1) |
@@ -93,7 +93,7 @@ curl "http://localhost:9080/rank/t1"
 |-----------|----------------|------------------|-------|
 | Event Submission | O(1) | O(1) | Hash map + channel |
 | Leaderboard Query | O(log n + N) | O(N) | In-order traversal |
-| Rank Lookup | O(log n) | O(1) | In-order traversal |
+| Rank Lookup | O(1) | O(1) | Snapshot-based lookup |
 | Update Best | O(log n) | O(1) | Treap operation |
 | Deduplication | O(1) | O(M) | Hash map lookup |
 

@@ -401,7 +401,7 @@ func (s *TreapStore) startPeriodicSnapshots(ctx context.Context) {
 | Insert | Treap | O(log n) | O(1) | Average case |
 | Delete | Treap | O(log n) | O(1) | Average case |
 | Top-N | Treap | O(log n + N) | O(N) | In-order traversal |
-| Rank | Treap | O(log n) | O(N) | In-order traversal |
+| Rank | Treap | O(1) | O(N) | Snapshot-based lookup |
 | Enqueue | Channel | O(1) | O(1) | Non-blocking |
 | Dequeue | Channel | O(1) | O(1) | Per event |
 | Dedupe Check | Hash Map | O(1) | O(1) | Average case |
@@ -506,7 +506,7 @@ func (s *SimpleLeaderboard) TopN(n int) []Entry {
 | Update | O(1) | O(n) | O(log n) | **O(log n)** |
 | Read | O(1) | O(log n) | O(log n) | **O(log n)** |
 | Top-N | **O(n log n)** | O(n) | O(log n + N) | **O(log n + N)** |
-| Rank | O(n) | O(log n) | O(log n) | **O(log n)** |
+| Rank | O(n) | O(log n) | O(log n) | **O(1)** |
 
 **The Key Insight**: 
 We compromised on individual read/update performance (O(1) → O(log n)) to achieve optimal Top-N performance (O(n log n) → O(log n + N)). This trade-off is justified because:

@@ -131,7 +131,7 @@ sequenceDiagram
 ### 4. Performance Characteristics
 - **Event Submission**: O(1) - Hash map lookup + channel send
 - **Leaderboard Query**: O(log n + N) - Treap in-order traversal
-- **Rank Lookup**: O(log n) - Single treap rank calculation
+- **Rank Lookup**: O(1) - Snapshot-based lookup
 - **Health Check**: O(1) - Simple status check
 
 ## Data Flow Summary

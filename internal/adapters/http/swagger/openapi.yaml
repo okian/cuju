@@ -72,7 +72,7 @@ paths:
   /rank/{talent_id}:
     get:
       summary: Get rank for a talent
-      description: Get rank and score for a specific talent. Time complexity: O(log n) - Single treap rank calculation
+      description: Get rank and score for a specific talent. Time complexity: O(1) - Snapshot-based lookup
       operationId: getRank
       parameters:
         - in: path
@@ -106,45 +106,6 @@ paths:
               schema:
                 type: string
                 description: Prometheus metrics in OpenMetrics format
-  /stats:
-    get:
-      summary: Service statistics
-      description: Get current service statistics and metrics in JSON format. Time complexity: O(1) - Direct metric access
-      operationId: getStats
-      responses:
-        '200':
-          description: Service statistics
-          content:
-            application/json:
-              schema:
-                type: object
-                description: Service statistics and metrics
-  /dashboard:
-    get:
-      summary: Web monitoring dashboard
-      description: Web-based monitoring dashboard with real-time metrics visualization. Time complexity: O(1) - Static HTML serving
-      operationId: getDashboard
-      responses:
-        '200':
-          description: HTML dashboard
-          content:
-            text/html:
-              schema:
-                type: string
-                description: HTML dashboard with real-time metrics
-  /api-docs:
-    get:
-      summary: Interactive API documentation
-      description: Interactive API documentation with Swagger UI and ReDoc interface. Time complexity: O(1) - Static HTML serving
-      operationId: getApiDocs
-      responses:
-        '200':
-          description: Swagger UI with ReDoc interface
-          content:
-            text/html:
-              schema:
-                type: string
-                description: HTML page with interactive API documentation
 components:
   schemas:
     Event:
