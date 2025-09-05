@@ -281,6 +281,163 @@ docker run -p 9080:9080 cuju
 docker run -p 9080:9080 -v $(pwd)/config.yaml:/app/config.yaml cuju
 ```
 
+## 🎯 Design Trade-offs & Scaling Considerations
+
+### In-Memory vs Persistent Storage Trade-offs
+
+**Current Choice: In-Memory Storage**
+
+**Why In-Memory + Snapshots Were Omitted:**
+- **Simplicity**: Eliminates complex snapshot management, recovery logic, and disk I/O coordination
+- **Performance**: Direct memory access provides optimal latency for real-time leaderboards
+- **Development Speed**: Faster iteration and testing without persistence layer complexity
+- **Resource Efficiency**: No disk space management, backup strategies, or data migration concerns
+
+**Trade-offs Accepted:**
+- **Data Loss Risk**: System restart loses all leaderboard state
+- **Limited Scale**: Memory capacity constrains maximum talent count
+- **No Historical Data**: Cannot track score changes over time
+- **Single Point of Failure**: No data redundancy or recovery mechanisms
+
+### Eventual vs Strong Consistency
+
+**Current Choice: Eventual Consistency**
+
+**Design Rationale:**
+- **Performance Priority**: Strong consistency would require distributed locking, significantly impacting latency
+- **User Experience**: Leaderboard updates can be slightly delayed (seconds) without affecting user experience
+- **Scalability**: Eventual consistency enables horizontal scaling and better throughput
+- **Fault Tolerance**: System remains available even if some components are temporarily unavailable
+
+**Consistency Model:**
+- **Event Processing**: Asynchronous with eventual consistency (80-150ms delay)
+- **Read Operations**: Strong consistency within single process (immediate consistency)
+- **Cross-Region**: Would require eventual consistency for global deployment
+
+### MVP vs Production Scale Design Differences
+
+#### **MVP (Current): Closed Beta, Few Hundred Users**
+
+**Architecture Characteristics:**
+- **Single Process**: All components in one application instance
+- **In-Memory Storage**: Fast access, simple deployment
+- **Basic Monitoring**: Health checks and basic metrics
+- **Local Deployment**: Single region, single data center
+- **Simple Configuration**: YAML-based config with environment overrides
+
+**Performance Profile:**
+- **Scale**: < 1,000 concurrent users, < 10,000 events/second
+- **Latency**: Sub-40ms read operations, 80-150ms event processing
+- **Memory**: < 10GB for full dataset
+- **Availability**: Single point of failure, manual recovery
+
+**Operational Model:**
+- **Deployment**: Simple binary deployment or Docker container
+- **Monitoring**: Basic health checks and Prometheus metrics
+- **Scaling**: Vertical scaling (more CPU/memory)
+- **Recovery**: Manual restart, data loss on failure
+
+#### **Production Scale: 30M MAUs, Multi-Country (Brazil, Germany, South Africa)**
+
+**Architecture Characteristics:**
+- **Distributed Microservices**: Separate services for API, processing, storage, and monitoring
+- **Persistent Storage**: Redis clusters + PostgreSQL for durability and analytics
+- **Advanced Monitoring**: Distributed tracing, advanced metrics, alerting
+- **Multi-Region**: Active-active deployment across regions
+- **Dynamic Configuration**: Feature flags, A/B testing, runtime configuration
+
+**Performance Profile:**
+- **Scale**: 30M+ concurrent users, 100K+ events/second
+- **Latency**: < 20ms read operations globally, < 100ms event processing
+- **Memory**: Distributed across multiple nodes, persistent storage
+- **Availability**: 99.99% uptime with automatic failover
+
+**Operational Model:**
+- **Deployment**: Kubernetes with auto-scaling, blue-green deployments
+- **Monitoring**: Comprehensive observability with distributed tracing
+- **Scaling**: Horizontal auto-scaling based on load
+- **Recovery**: Automatic failover, data replication, backup/restore
+
+#### **Key Architectural Changes for Production Scale**
+
+**Data Layer:**
+```yaml
+# MVP (Current)
+storage: in-memory
+consistency: eventual (single process)
+backup: none
+
+# Production Scale
+storage: 
+  - Redis clusters (hot data)
+  - PostgreSQL (persistent data)
+  - S3 (analytics/archival)
+consistency: eventual (cross-region)
+backup: automated, multi-region replication
+```
+
+**Processing Layer:**
+```yaml
+# MVP (Current)
+workers: 20x CPU cores
+queue: in-memory channel
+scoring: synchronous simulation
+
+# Production Scale
+workers: auto-scaling based on queue depth
+queue: Kafka with partitioning
+scoring: async ML service integration
+```
+
+**Deployment Model:**
+```yaml
+# MVP (Current)
+deployment: single binary
+scaling: vertical (more resources)
+regions: single
+availability: manual recovery
+
+# Production Scale
+deployment: Kubernetes microservices
+scaling: horizontal auto-scaling
+regions: active-active (Brazil, Germany, South Africa)
+availability: automatic failover
+```
+
+**Monitoring & Observability:**
+```yaml
+# MVP (Current)
+metrics: Prometheus
+logging: structured logs
+tracing: none
+alerting: basic health checks
+
+# Production Scale
+metrics: Prometheus + Grafana + AlertManager
+logging: centralized logging (ELK stack)
+tracing: distributed tracing (Jaeger/Zipkin)
+alerting: sophisticated alerting with runbooks
+```
+
+### Regional Considerations for Multi-Country Deployment
+
+**Latency Optimization:**
+- **Edge Caching**: CDN for static content, edge compute for read operations
+- **Data Locality**: Regional data centers to minimize cross-region latency
+- **Read Replicas**: Local read replicas for leaderboard queries
+
+**Compliance & Data Sovereignty:**
+- **Data Residency**: Ensure data stays within country boundaries
+- **GDPR Compliance**: Data processing and retention policies
+- **Local Regulations**: Compliance with Brazilian, German, and South African regulations
+
+**Network & Infrastructure:**
+- **Cross-Region Connectivity**: Reliable, low-latency connections between regions
+- **Disaster Recovery**: Regional failover capabilities
+- **Load Distribution**: Intelligent routing based on user location
+
+This design evolution represents the natural progression from a focused MVP to a production-scale system, with each architectural decision optimized for the specific scale and requirements of the deployment phase.
+
 ### Monitoring
 - **Metrics**: `http://localhost:9080/healthz` (Prometheus metrics)
 - **Dashboard**: `http://localhost:9080/dashboard` (Web UI)
